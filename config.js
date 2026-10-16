@@ -11,7 +11,7 @@ export const PESSOAS = {
 // ficam salvos só no aparelho em que foram registrados.
 
 // Your web app's Firebase configuration
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyA4djDV-opafw4qsQc_agwLlYR5hD8B0Ls",
   authDomain: "jogos-do-dia-39464.firebaseapp.com",
   projectId: "jogos-do-dia-39464",
