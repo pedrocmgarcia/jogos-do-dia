@@ -9,7 +9,6 @@ export const PESSOAS = {
 // Cole aqui a configuração do seu app Web do Firebase (passo 2 do LEIA-ME).
 // Enquanto estiver null, o site roda em "modo de teste": os resultados
 // ficam salvos só no aparelho em que foram registrados.
-export const firebaseConfig = null;
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
