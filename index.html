@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-/* Layout: grade de letras no topo, placar A × B, depois um cartão por jogo com as duas colunas lado a lado */
+/* Layout: topo compacto (letras, dia, placar), campo "Colar resultado", depois um cartão por jogo com as duas colunas lado a lado */
 :root {
   --bg: #eef1f4;
   --surface: #ffffff;
@@ -32,7 +32,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #12161d; --surface: #1b212b; --ink: #e8ecf2; --muted: #9aa3b2;
-    --tile: #3a4250; --tile-ink: #f4f6f9; --done: #4fa26b; --near: #c9a23a; --miss: #c9694f;
+    --tile: #3a4250; --tile-ink: #f4f6f9; --done: #4fa26b; --near: #c9a23a; --miss: #d9775c;
     --line: #2c3440; --focus: #6d9eff; color-scheme: dark;
   }
 }
@@ -44,55 +44,93 @@ body {
   margin: 0; background: var(--bg); color: var(--ink);
   font-family: var(--font-body); font-size: 1rem; line-height: 1.5;
   padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
-  padding-block: max(24px, env(safe-area-inset-top)) max(48px, env(safe-area-inset-bottom));
+  padding-block: max(20px, env(safe-area-inset-top)) max(80px, env(safe-area-inset-bottom));
 }
-.wrap { max-width: 920px; margin-inline: auto; display: grid; gap: 28px; }
+.wrap { max-width: 920px; margin-inline: auto; display: grid; gap: 20px; }
 
-header { display: grid; gap: 18px; }
-.tiles { display: flex; flex-wrap: wrap; gap: 5px; }
-.tiles span {
-  width: clamp(30px, 8vw, 52px); aspect-ratio: 1;
-  display: grid; place-items: center;
-  font-family: var(--font-display); font-weight: 800;
-  font-size: clamp(1.05rem, 4.5vw, 1.9rem);
-  background: var(--tile); color: var(--tile-ink); border-radius: 4px;
-}
-.tiles span.g { background: var(--done); }
-.tiles span.y { background: var(--near); }
-.tiles span.gap { background: none; width: 10px; }
+header { display: grid; gap: 12px; }
 h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-.daynav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.daynav .date { font-family: var(--font-mono); font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+/* título em letras: as palavras nunca quebram no meio */
+.tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+.word { display: flex; gap: 4px; }
+.word span {
+  width: clamp(24px, 7vw, 46px); aspect-ratio: 1;
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(.95rem, 4vw, 1.7rem);
+  background: var(--tile); color: var(--tile-ink); border-radius: 4px;
+}
+.word span.g { background: var(--done); }
+.word span.y { background: var(--near); }
+
 button {
   font: inherit; font-size: .95rem; color: var(--ink); background: transparent;
   border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; cursor: pointer;
   min-height: 40px;
 }
 button:hover:not(:disabled) { border-color: var(--muted); }
-button:disabled { opacity: .4; cursor: default; }
+button:disabled { opacity: .45; cursor: default; }
 button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 700; }
 button.danger { color: var(--miss); }
-button.link { border: 0; padding: 0; min-height: 0; color: var(--muted); text-decoration: underline; font-size: .9rem; }
+button.link { border: 0; padding: 0; min-height: 0; color: inherit; text-decoration: underline; font-size: inherit; }
 
-.board { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
-.board > div { display: grid; gap: 4px; }
-.label { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
-.score { font-family: var(--font-display); font-size: 1.3rem; font-weight: 500; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
-.score b { font-weight: 800; font-variant-numeric: tabular-nums; }
-.score .x { color: var(--muted); }
+/* navegação de dias numa linha só */
+.daynav { display: flex; align-items: center; gap: 8px; }
+.daynav button { min-width: 44px; padding-inline: 10px; flex: none; }
+.daynav .date {
+  flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--font-mono); font-size: .82rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
+}
+
+/* placar em tabela: pessoas nas linhas, hoje e geral nas colunas */
+.board { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: grid; gap: 2px; }
+.b-row { display: grid; grid-template-columns: minmax(0, 1fr) 4rem 7rem; align-items: baseline; gap: 8px; }
+.b-head span { font-family: var(--font-mono); font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; text-align: right; }
+.b-name { font-family: var(--font-display); font-weight: 500; font-size: 1.1rem; overflow-wrap: anywhere; }
+.b-name small { font-family: var(--font-body); font-size: .8rem; color: var(--muted); font-weight: 400; }
+.b-row b { text-align: right; font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.b-row b.lead { color: var(--done); }
 
 .who-pick { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; }
 .who-pick p { margin: 0; font-weight: 700; }
 .who-pick .row { display: flex; flex-wrap: wrap; gap: 8px; }
-.me-line { color: var(--muted); font-size: .95rem; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.me-line { color: var(--muted); font-size: .9rem; }
 .me-line strong { color: var(--ink); }
 
 .note { background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 14px; color: var(--muted); font-size: .92rem; }
-.toast { font-size: .9rem; color: var(--miss); min-height: 1.4em; }
+
+/* campo único para colar o resultado de qualquer jogo */
+.quick { background: var(--surface); border: 2px solid var(--near); border-radius: 10px; padding: 12px; display: grid; gap: 8px; }
+.quick-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.quick-head label { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; }
+.quick textarea, form.rec textarea {
+  font-family: var(--font-mono); font-size: 16px; width: 100%; padding: 8px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); resize: vertical;
+}
+.quick textarea { min-height: 4.2em; }
+.quick-preview { display: grid; gap: 8px; }
+.quick-sum { font-family: var(--font-display); font-weight: 800; font-size: 1.2rem; }
+
+.err { color: var(--miss); font-size: .88rem; }
+.hint { color: var(--muted); font-size: .85rem; }
+.flash { font-size: .9rem; font-weight: 700; }
+.flash.ok { color: var(--done); }
+.flash.err { color: var(--miss); }
+.day-line { font-size: .85rem; color: var(--muted); }
+.day-line.warn { color: var(--miss); font-weight: 700; }
+
+/* avisos gerais ficam presos embaixo da tela, visíveis em qualquer ponto da página */
+.toast {
+  position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  max-width: 560px; margin-inline: auto; z-index: 10;
+  background: var(--ink); color: var(--bg); border-radius: 8px; padding: 10px 14px; font-size: .92rem;
+  box-shadow: 0 6px 20px rgb(0 0 0 / .25);
+}
+.toast:empty { display: none; }
 
 main { display: grid; gap: 14px; }
-.game { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.game { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 12px; min-width: 0; scroll-margin-top: 16px; }
 .game-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
 .game-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; }
 .game-head .desc { color: var(--muted); font-size: .9rem; flex: 1 1 200px; min-width: 0; }
@@ -127,9 +165,7 @@ form.rec .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: cent
 form.rec label { display: inline-flex; align-items: center; gap: 8px; }
 form.rec input[type="number"] { width: 5.5em; font: inherit; font-size: 16px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
 form.rec input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--miss); }
-form.rec textarea { font-family: var(--font-mono); font-size: 16px; width: 100%; min-height: 6.5em; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); resize: vertical; }
-form.rec .err { color: var(--miss); font-size: .88rem; }
-form.rec .hint { color: var(--muted); font-size: .85rem; }
+form.rec textarea { min-height: 6.5em; }
 
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 footer { color: var(--muted); font-size: .85rem; }
@@ -140,19 +176,17 @@ footer { color: var(--muted); font-size: .85rem; }
   <header>
     <h1>Jogos do Dia</h1>
     <div class="tiles" aria-hidden="true">
-      <span class="g">J</span><span>O</span><span class="y">G</span><span>O</span><span class="g">S</span>
-      <span class="gap"></span>
-      <span>D</span><span class="y">O</span>
-      <span class="gap"></span>
-      <span>D</span><span class="g">I</span><span>A</span>
+      <span class="word"><span class="g">J</span><span>O</span><span class="y">G</span><span>O</span><span class="g">S</span></span>
+      <span class="word"><span>D</span><span class="y">O</span></span>
+      <span class="word"><span>D</span><span class="g">I</span><span>A</span></span>
     </div>
     <div class="daynav">
       <button type="button" id="prev" aria-label="Dia anterior">←</button>
       <span class="date" id="date"></span>
-      <button type="button" id="next" aria-label="Próximo dia">→</button>
       <button type="button" id="today">Hoje</button>
+      <button type="button" id="next" aria-label="Próximo dia">→</button>
     </div>
-    <div class="board" id="board"></div>
+    <div class="board" id="board" aria-label="Placar"></div>
     <div class="who-pick" id="who-pick" hidden>
       <p>Quem é você neste aparelho?</p>
       <div class="row">
@@ -162,24 +196,40 @@ footer { color: var(--muted); font-size: .85rem; }
     </div>
     <div class="me-line" id="me-line" hidden></div>
     <div class="note" id="note" hidden></div>
-    <div class="toast" id="toast" role="status"></div>
+    <section class="quick" id="quick" hidden>
+      <div class="quick-head">
+        <label for="quick-txt">Colar resultado</label>
+        <button type="button" id="quick-paste">Colar</button>
+      </div>
+      <textarea id="quick-txt" rows="3" placeholder="Cole aqui o texto de compartilhar de qualquer um dos 5 jogos"></textarea>
+      <div class="quick-preview" id="quick-preview" aria-live="polite"></div>
+    </section>
   </header>
 
   <main id="list"></main>
 
   <footer>Em cada jogo, quem acerta com menos tentativas leva o ponto do dia.</footer>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script type="module">
 import { PESSOAS, firebaseConfig } from "./config.js";
 
 // ---- Edite aqui: a lista de jogos (max = número máximo de tentativas; null = sem limite) ----
+// "reconhece" diz como achar o jogo no texto de compartilhar; a ordem importa (Quarteto e Dueto antes do Termo).
 const JOGOS = [
   { id: "termo",    nome: "Termo",    url: "https://term.ooo",        max: 6,    desc: "Uma palavra de 5 letras em 6 tentativas." },
   { id: "dueto",    nome: "Dueto",    url: "https://term.ooo/2/",     max: 7,    desc: "Duas palavras ao mesmo tempo, 7 tentativas." },
   { id: "quarteto", nome: "Quarteto", url: "https://term.ooo/4/",     max: 9,    desc: "Quatro palavras ao mesmo tempo, 9 tentativas." },
   { id: "globle",   nome: "Globle",   url: "https://globle-game.com", max: null, desc: "Ache o país secreto pelo calor no globo. Menos palpites é melhor." },
   { id: "flagle",   nome: "Flagle",   url: "https://www.flagle.io",   max: 6,    desc: "Monte a bandeira do dia em 6 tentativas." },
+];
+const RECONHECE = [
+  ["quarteto", /term\.ooo\/4|quarteto/i],
+  ["dueto",    /term\.ooo\/2|dueto/i],
+  ["termo",    /term\.ooo|\btermo\b/i],
+  ["globle",   /globle/i],
+  ["flagle",   /flagle/i],
 ];
 // ---------------------------------------------------------------------------------------------
 
@@ -189,6 +239,8 @@ const pad = n => String(n).padStart(2, "0");
 const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const dateOf = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
 const hoje = () => keyOf(new Date());
+const curto = k => dateOf(k).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+const jogo = id => JOGOS.find(j => j.id === id);
 
 const ls = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -206,6 +258,9 @@ let editing = null;
 let drafts = {};
 let formErr = {};
 let pendingDelete = null;
+let saving = {};              // jogo -> "salvando" | "lento" | "apagando"
+let flash = {};               // jogo -> { msg, kind: "ok" | "err" }
+const quick = { saving: false, lento: false, err: null, done: null, info: null };
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -213,10 +268,23 @@ function el(tag, cls, text) {
   if (text != null) e.textContent = text;
   return e;
 }
+function botao(texto, id, cls, onClick, tipo = "button") {
+  const b = el("button", cls, texto);
+  b.type = tipo; if (id) b.id = id;
+  if (onClick) b.addEventListener("click", onClick);
+  return b;
+}
 function toast(msg) {
   const t = $("#toast");
   t.textContent = msg;
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.textContent = "", 6000);
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.textContent = "", 7000);
+}
+const flashTimers = {};
+function piscar(gid, msg, kind = "ok") {
+  flash[gid] = { msg, kind };
+  render();
+  clearTimeout(flashTimers[gid]);
+  flashTimers[gid] = setTimeout(() => { delete flash[gid]; render(); }, kind === "ok" ? 3500 : 9000);
 }
 
 const resultOf = (p, day, gid) => dias[day]?.[p]?.[gid] || null;
@@ -242,6 +310,11 @@ function fmtRes(g, r) {
   return g.max ? `X/${g.max}` : "Desistiu";
 }
 
+// descobre de qual jogo é o texto de compartilhar
+function detectarJogo(txt) {
+  for (const [id, re] of RECONHECE) if (re.test(txt)) return id;
+  return null;
+}
 // tenta achar o resultado no texto de compartilhar
 function parse(txt, g) {
   if (g.max) {
@@ -251,11 +324,15 @@ function parse(txt, g) {
       if (parts.includes("X")) return { x: true, n: "" };
       return { x: false, n: String(Math.max(...parts.map(Number))) };
     }
+  } else {
+    const m = txt.match(/=\s*(\d+)/);
+    if (m) return { x: false, n: m[1] };
   }
   const m2 = txt.match(/(\d+)\s*(?:tries|try|guesses|guess|tentativas?|palpites?)/i);
   if (m2) return { x: false, n: m2[1] };
   return null;
 }
+function valido(g, n) { return n >= 1 && (!g.max || n <= g.max); }
 
 // ---- onde os resultados ficam guardados ----
 async function criarStore() {
@@ -293,44 +370,170 @@ function storeLocal() {
   };
 }
 
-function falhou(e) {
-  console.error(e);
-  if (e && e.code === "permission-denied") toast("O Firebase recusou a gravação. Confira se as regras do LEIA-ME foram publicadas.");
-  else toast("Não consegui salvar agora. Confira a internet e tente de novo.");
+function msgErro(e, verbo) {
+  if (e && e.code === "permission-denied") return `O servidor recusou e não deu para ${verbo}. Avise quem cuida do site.`;
+  return `Não consegui ${verbo}. Confira a internet e tente de novo.`;
+}
+// grava e só responde quando o servidor confirmou; avisa se estiver demorando
+async function gravar(gid, day, entry, onLento) {
+  const t = setTimeout(onLento, 8000);
+  try { await store.salvar(eu, day, gid, entry); return null; }
+  catch (e) { console.error(e); return msgErro(e, "salvar"); }
+  finally { clearTimeout(t); }
 }
 
-// ---- ações do formulário ----
-function openForm(gid) {
+// linha que diz para qual dia o resultado vai, com alerta quando não é hoje
+function linhaDoDia(k, idHoje) {
+  if (k === hoje()) return el("div", "day-line", `Resultado de hoje (${curto(k)})`);
+  const box = el("div", "day-line warn", `Atenção: este resultado vai para ${curto(k)}, não para hoje. `);
+  box.append(botao("Mudar para hoje", idHoje, "link", () => irPara(hoje(), true)));
+  return box;
+}
+
+// ---- formulário de cada jogo ----
+function openForm(gid, txt) {
   const r = resultOf(eu, viewDay, gid);
   editing = gid;
-  drafts[gid] = { n: r && r.ok ? String(r.n) : "", x: r ? !r.ok : false, txt: r?.txt || "" };
+  drafts[gid] = { n: r && r.ok ? String(r.n) : "", x: r ? !r.ok : false, txt: txt ?? r?.txt ?? "" };
   delete formErr[gid];
   pendingDelete = null;
   render();
-  document.getElementById("t-" + gid)?.focus();
+  const alvo = document.getElementById((txt ? "n-" : "t-") + gid);
+  alvo?.focus();
+  alvo?.closest(".game")?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
-function submitForm(g) {
+async function submitForm(g) {
+  if (saving[g.id]) return;
   const d = drafts[g.id];
   const n = parseInt(d.n, 10);
-  if (!d.x && !(n >= 1 && (!g.max || n <= g.max))) {
+  if (!d.x && !valido(g, n)) {
     formErr[g.id] = g.max ? `Coloque um número de 1 a ${g.max}, ou marque "Não acertei".` : `Coloque quantos palpites, ou marque "Desisti".`;
     render();
     return;
   }
+  const day = viewDay;
   const entry = { ok: !d.x, n: d.x ? null : n, txt: (d.txt || "").trim().slice(0, 300), at: new Date().toISOString() };
-  editing = null; delete drafts[g.id]; delete formErr[g.id];
+  saving[g.id] = "salvando"; delete formErr[g.id];
   render();
-  store.salvar(eu, viewDay, g.id, entry).catch(falhou);
+  const err = await gravar(g.id, day, entry, () => { if (saving[g.id]) { saving[g.id] = "lento"; render(); } });
+  delete saving[g.id];
+  if (err) { formErr[g.id] = err; render(); return; }   // o formulário continua aberto, com o texto
+  if (editing === g.id) { editing = null; delete drafts[g.id]; }
+  piscar(g.id, `✓ Salvo (${fmtRes(g, entry)})`);
 }
-function removeMine(gid) {
+async function removeMine(gid) {
   pendingDelete = null;
-  store.apagar(eu, viewDay, gid).catch(falhou);
+  saving[gid] = "apagando";
+  render();
+  try {
+    await store.apagar(eu, viewDay, gid);
+    delete saving[gid];
+    piscar(gid, "✓ Apagado");
+  } catch (e) {
+    console.error(e);
+    delete saving[gid];
+    piscar(gid, msgErro(e, "apagar"), "err");
+  }
 }
 function escolher(p) {
   eu = p; ls.set("jdd:eu", p);
   editing = null; pendingDelete = null;
   render();
 }
+
+// ---- campo "Colar resultado" ----
+function quickEntender() {
+  const txt = $("#quick-txt").value.trim();
+  if (!txt) return null;
+  const gid = detectarJogo(txt);
+  if (!gid) return { txt };
+  const g = jogo(gid);
+  const p = parse(txt, g);
+  if (!p) return { txt, g };
+  const n = parseInt(p.n, 10);
+  if (!p.x && !valido(g, n)) return { txt, g };
+  return { txt, g, entry: { ok: !p.x, n: p.x ? null : n } };
+}
+function renderQuick() {
+  const box = $("#quick");
+  const ativo = !!eu && (modo === "remoto" || modo === "local");
+  box.hidden = !ativo;
+  if (!ativo) return;
+  $("#quick-paste").hidden = !navigator.clipboard?.readText;
+  const prev = $("#quick-preview");
+  prev.replaceChildren();
+
+  if (quick.done) { prev.append(el("div", "flash ok", quick.done)); return; }
+  const q = quickEntender();
+  if (!q) {
+    prev.append(el("div", "hint", quick.info || "O site descobre sozinho de qual jogo é o texto e quantas tentativas você usou."));
+    return;
+  }
+  if (!q.g) {
+    prev.append(el("div", "err", "Não reconheci de qual jogo é este texto. Use o botão Registrar no cartão do jogo."));
+    const acts = el("div", "actions");
+    acts.append(botao("Limpar", "quick-clear", null, limparQuick));
+    prev.append(acts);
+    return;
+  }
+  if (!q.entry) {
+    prev.append(el("div", "err", `Reconheci o ${q.g.nome}, mas não achei quantas tentativas você usou.`));
+    const acts = el("div", "actions");
+    acts.append(
+      botao("Preencher à mão", "quick-fill", "primary", () => { const t = q.txt; limparQuick(); openForm(q.g.id, t); }),
+      botao("Limpar", "quick-clear", null, limparQuick),
+    );
+    prev.append(acts);
+    return;
+  }
+
+  prev.append(el("div", "quick-sum", `${q.g.nome} · ${fmtRes(q.g, q.entry)}`));
+  prev.append(linhaDoDia(viewDay, "quick-today"));
+  const atual = resultOf(eu, viewDay, q.g.id);
+  if (atual) prev.append(el("div", "hint", `Vai substituir o seu resultado atual (${fmtRes(q.g, atual)}).`));
+  if (quick.err) prev.append(el("div", "err", quick.err));
+  if (quick.lento) prev.append(el("div", "hint", "Está demorando. Confira a internet e não feche a página."));
+  const acts = el("div", "actions");
+  const salvar = botao(quick.saving ? "Salvando…" : "Salvar", "quick-save", "primary", () => quickSalvar(q));
+  salvar.disabled = quick.saving;
+  acts.append(salvar, botao("Limpar", "quick-clear", null, limparQuick));
+  prev.append(acts);
+}
+async function quickSalvar(q) {
+  if (quick.saving) return;
+  quick.saving = true; quick.err = null; quick.lento = false;
+  renderQuick();
+  const entry = { ...q.entry, txt: q.txt.slice(0, 300), at: new Date().toISOString() };
+  const err = await gravar(q.g.id, viewDay, entry, () => { if (quick.saving) { quick.lento = true; renderQuick(); } });
+  quick.saving = false; quick.lento = false;
+  if (err) { quick.err = err; renderQuick(); return; }        // o texto continua na caixa
+  $("#quick-txt").value = "";
+  quick.done = `✓ ${q.g.nome} salvo: ${fmtRes(q.g, entry)}`;
+  piscar(q.g.id, `✓ Salvo (${fmtRes(q.g, entry)})`);
+  clearTimeout(quickSalvar.t);
+  quickSalvar.t = setTimeout(() => { quick.done = null; renderQuick(); }, 4000);
+}
+function limparQuick() {
+  $("#quick-txt").value = "";
+  Object.assign(quick, { err: null, done: null, info: null, lento: false });
+  renderQuick();
+}
+$("#quick-txt").addEventListener("input", () => {
+  Object.assign(quick, { err: null, done: null, info: null });
+  renderQuick();
+});
+$("#quick-paste").addEventListener("click", async () => {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (!t) throw new Error("vazio");
+    $("#quick-txt").value = t;
+    Object.assign(quick, { err: null, done: null, info: null });
+  } catch (e) {
+    quick.info = "Não deu para colar pelo botão. Toque e segure na caixa acima e escolha Colar.";
+    $("#quick-txt").focus();
+  }
+  renderQuick();
+});
 
 // ---- desenho ----
 function render() {
@@ -340,28 +543,28 @@ function render() {
   let sel = null;
   try { if (act && typeof act.selectionStart === "number") sel = [act.selectionStart, act.selectionEnd]; } catch (e) {}
 
-  const label = dateOf(viewDay).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
-  $("#date").textContent = (viewDay === hoje() ? "Hoje · " : "") + label;
-  $("#next").disabled = viewDay >= hoje();
-  $("#today").hidden = viewDay === hoje();
+  const ehHoje = viewDay === hoje();
+  $("#date").textContent = (ehHoje ? "Hoje · " : "") + curto(viewDay);
+  $("#next").disabled = ehHoje;
+  $("#today").hidden = ehHoje;
 
   // placar
   const board = $("#board");
   board.replaceChildren();
   const comDados = Object.keys(dias).filter(k => JOGOS.some(g => winnerOf(k, g.id)));
-  const blocos = [
-    [viewDay === hoje() ? "Placar de hoje" : "Placar do dia", pontos([viewDay])],
-    [`Placar geral · ${comDados.length} dia${comDados.length === 1 ? "" : "s"}`, pontos(comDados)],
-  ];
-  for (const [titulo, pts] of blocos) {
-    const box = el("div");
-    box.append(el("span", "label", titulo));
-    const s = el("div", "score");
-    const a = el("span", null, PESSOAS.A + " "); a.append(el("b", null, String(pts.A)));
-    const b = el("span", null, PESSOAS.B + " "); b.append(el("b", null, String(pts.B)));
-    s.append(a, el("span", "x", "×"), b);
-    box.append(s);
-    board.append(box);
+  const ptsDia = pontos([viewDay]), ptsGeral = pontos(comDados);
+  const head = el("div", "b-row b-head");
+  head.append(el("span"), el("span", null, ehHoje ? "Hoje" : "No dia"), el("span", null, `Geral · ${comDados.length} dia${comDados.length === 1 ? "" : "s"}`));
+  board.append(head);
+  for (const p of LADOS) {
+    const o = p === "A" ? "B" : "A";
+    const row = el("div", "b-row");
+    const nome = el("span", "b-name", PESSOAS[p]);
+    if (p === eu) nome.append(el("small", null, " (você)"));
+    row.append(nome,
+      el("b", ptsDia[p] > ptsDia[o] ? "lead" : null, String(ptsDia[p])),
+      el("b", ptsGeral[p] > ptsGeral[o] ? "lead" : null, String(ptsGeral[p])));
+    board.append(row);
   }
 
   // quem sou eu
@@ -372,27 +575,27 @@ function render() {
   meLine.hidden = !eu;
   meLine.replaceChildren();
   if (eu) {
-    meLine.append("Neste aparelho você é ", el("strong", null, PESSOAS[eu]));
-    const troca = el("button", "link", "trocar");
-    troca.type = "button"; troca.id = "trocar";
-    troca.addEventListener("click", () => { eu = null; ls.set("jdd:eu", null); editing = null; render(); });
-    meLine.append(troca);
+    meLine.append("Neste aparelho você é ", el("strong", null, PESSOAS[eu]), " · ");
+    meLine.append(botao("trocar", "trocar", "link", () => { eu = null; ls.set("jdd:eu", null); editing = null; render(); }));
   }
 
   // aviso
   const note = $("#note");
   let msg = "";
   if (modo === "carregando") msg = "Carregando resultados…";
-  else if (modo === "local") msg = "Modo de teste: o Firebase ainda não foi configurado, então os resultados ficam salvos só neste aparelho.";
-  else if (modo === "erro") msg = "Não consegui conectar ao Firebase. Confira a configuração em config.js e a internet, e recarregue a página.";
+  else if (modo === "local") msg = "Modo de teste: os resultados ficam salvos só neste aparelho.";
+  else if (modo === "erro") msg = "Não consegui carregar os resultados. Confira a internet e recarregue a página.";
   note.textContent = msg;
   note.hidden = !msg;
+
+  renderQuick();
 
   // jogos
   const list = $("#list");
   list.replaceChildren();
   for (const g of JOGOS) {
     const card = el("article", "game");
+    card.id = `jogo-${g.id}`;
     const head = el("div", "game-head");
     head.append(el("h2", null, g.nome), el("span", "desc", g.desc));
     const a = el("a", "play", "Jogar ↗");
@@ -410,7 +613,7 @@ function render() {
   if (fid) {
     const back = document.getElementById(fid);
     if (back && back !== document.activeElement) {
-      back.focus();
+      back.focus({ preventScroll: true });
       if (sel) try { back.setSelectionRange(sel[0], sel[1]); } catch (e) {}
     }
   }
@@ -436,21 +639,21 @@ function cell(g, p, w) {
   c.append(res);
   if (r && r.txt) c.append(el("pre", "grid", r.txt));
 
-  if (meu && modo !== "carregando" && modo !== "erro") {
+  if (meu) {
+    if (flash[g.id]) c.append(el("div", "flash " + flash[g.id].kind, flash[g.id].msg));
+    if (saving[g.id] === "apagando") c.append(el("div", "hint", "Apagando…"));
+    else if (saving[g.id]) c.append(el("div", "hint", "Salvando…"));
+  }
+
+  if (meu && modo !== "carregando" && modo !== "erro" && !saving[g.id]) {
     const acts = el("div", "actions");
-    const b = el("button", r ? null : "primary", r ? "Editar" : "Registrar");
-    b.type = "button"; b.id = `rec-${g.id}`;
-    b.addEventListener("click", () => openForm(g.id));
-    acts.append(b);
+    acts.append(botao(r ? "Editar" : "Registrar", `rec-${g.id}`, r ? null : "primary", () => openForm(g.id)));
     if (r) {
       const confirmar = pendingDelete === g.id;
-      const del = el("button", "danger", confirmar ? "Confirmar" : "Apagar");
-      del.type = "button"; del.id = `del-${g.id}`;
-      del.addEventListener("click", () => {
+      acts.append(botao(confirmar ? "Confirmar" : "Apagar", `del-${g.id}`, "danger", () => {
         if (confirmar) removeMine(g.id);
         else { pendingDelete = g.id; render(); }
-      });
-      acts.append(del);
+      }));
     }
     c.append(acts);
   }
@@ -459,8 +662,11 @@ function cell(g, p, w) {
 
 function form(g) {
   const d = drafts[g.id];
+  const st = saving[g.id];
   const f = el("form", "rec");
   f.noValidate = true;
+
+  f.append(linhaDoDia(viewDay, `today-${g.id}`));
 
   const t = el("textarea");
   t.id = `t-${g.id}`;
@@ -474,6 +680,7 @@ function form(g) {
   n.type = "number"; n.id = `n-${g.id}`; n.min = "1"; if (g.max) n.max = String(g.max);
   n.inputMode = "numeric"; n.value = d.n; n.disabled = d.x;
   ln.append(n);
+  if (g.max) ln.append(` de ${g.max}`);
   const lx = el("label");
   const x = el("input");
   x.type = "checkbox"; x.id = `x-${g.id}`; x.checked = d.x;
@@ -490,20 +697,26 @@ function form(g) {
 
   f.append(t, row);
   if (formErr[g.id]) f.append(el("div", "err", formErr[g.id]));
+  else if (st === "lento") f.append(el("div", "hint", "Está demorando. Confira a internet e não feche a página."));
   else f.append(el("div", "hint", "Ao colar o texto, o número de tentativas é preenchido sozinho quando dá."));
 
   const acts = el("div", "actions");
-  const save = el("button", "primary", "Salvar"); save.type = "submit"; save.id = `save-${g.id}`;
-  const cancel = el("button", null, "Cancelar"); cancel.type = "button"; cancel.id = `cancel-${g.id}`;
-  cancel.addEventListener("click", () => { editing = null; delete drafts[g.id]; delete formErr[g.id]; render(); });
-  acts.append(save, cancel);
+  const save = botao(st ? "Salvando…" : "Salvar", `save-${g.id}`, "primary", null, "submit");
+  save.disabled = !!st;
+  acts.append(save, botao("Cancelar", `cancel-${g.id}`, null, () => { editing = null; delete drafts[g.id]; delete formErr[g.id]; render(); }));
   f.append(acts);
   f.addEventListener("submit", e => { e.preventDefault(); submitForm(g); });
   return f;
 }
 
 // ---- navegação ----
-function irPara(k) { viewDay = k; editing = null; pendingDelete = null; render(); }
+function irPara(k, manterEdicao = false) {
+  viewDay = k;
+  if (!manterEdicao) editing = null;
+  pendingDelete = null;
+  Object.assign(quick, { err: null, done: null });
+  render();
+}
 $("#prev").addEventListener("click", () => { const d = dateOf(viewDay); d.setDate(d.getDate() - 1); irPara(keyOf(d)); });
 $("#next").addEventListener("click", () => { const d = dateOf(viewDay); d.setDate(d.getDate() + 1); if (keyOf(d) <= hoje()) irPara(keyOf(d)); });
 $("#today").addEventListener("click", () => irPara(hoje()));
@@ -521,7 +734,7 @@ try {
   store = await criarStore();
   modo = store.tipo;
   render();
-  store.assinar(d => { dias = d; render(); }, e => { console.error(e); modo = "erro"; render(); });
+  store.assinar(d => { dias = d; render(); }, e => { console.error(e); modo = "erro"; render(); toast("A conexão com os resultados caiu. Recarregue a página."); });
 } catch (e) {
   console.error(e);
   modo = "erro";
