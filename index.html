@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#eef1f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12161d" media="(prefers-color-scheme: dark)">
+<title>Jogos do Dia</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%233e8e5a'/%3E%3Ctext x='16' y='23' font-size='20' font-family='sans-serif' font-weight='800' fill='white' text-anchor='middle'%3EJ%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: grade de letras no topo, placar A × B, depois um cartão por jogo com as duas colunas lado a lado */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --ink: #1b2230;
+  --muted: #5d6676;
+  --tile: #c9cfd8;
+  --tile-ink: #ffffff;
+  --done: #3e8e5a;
+  --near: #c9971c;
+  --miss: #b5523b;
+  --line: #d8dde4;
+  --focus: #2f6fdb;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161d; --surface: #1b212b; --ink: #e8ecf2; --muted: #9aa3b2;
+    --tile: #3a4250; --tile-ink: #f4f6f9; --done: #4fa26b; --near: #c9a23a; --miss: #c9694f;
+    --line: #2c3440; --focus: #6d9eff; color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 1rem; line-height: 1.5;
+  padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+  padding-block: max(24px, env(safe-area-inset-top)) max(48px, env(safe-area-inset-bottom));
+}
+.wrap { max-width: 920px; margin-inline: auto; display: grid; gap: 28px; }
+
+header { display: grid; gap: 18px; }
+.tiles { display: flex; flex-wrap: wrap; gap: 5px; }
+.tiles span {
+  width: clamp(30px, 8vw, 52px); aspect-ratio: 1;
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(1.05rem, 4.5vw, 1.9rem);
+  background: var(--tile); color: var(--tile-ink); border-radius: 4px;
+}
+.tiles span.g { background: var(--done); }
+.tiles span.y { background: var(--near); }
+.tiles span.gap { background: none; width: 10px; }
+h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+.daynav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.daynav .date { font-family: var(--font-mono); font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+button {
+  font: inherit; font-size: .95rem; color: var(--ink); background: transparent;
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; cursor: pointer;
+  min-height: 40px;
+}
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 700; }
+button.danger { color: var(--miss); }
+button.link { border: 0; padding: 0; min-height: 0; color: var(--muted); text-decoration: underline; font-size: .9rem; }
+
+.board { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.board > div { display: grid; gap: 4px; }
+.label { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.score { font-family: var(--font-display); font-size: 1.3rem; font-weight: 500; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.score b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.score .x { color: var(--muted); }
+
+.who-pick { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; }
+.who-pick p { margin: 0; font-weight: 700; }
+.who-pick .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.me-line { color: var(--muted); font-size: .95rem; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.me-line strong { color: var(--ink); }
+
+.note { background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 14px; color: var(--muted); font-size: .92rem; }
+.toast { font-size: .9rem; color: var(--miss); min-height: 1.4em; }
+
+main { display: grid; gap: 14px; }
+.game { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.game-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
+.game-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; }
+.game-head .desc { color: var(--muted); font-size: .9rem; flex: 1 1 200px; min-width: 0; }
+.play { color: var(--ink); font-weight: 700; text-decoration: none; border-bottom: 2px solid var(--near); padding-block: 4px 1px; }
+.play:hover { border-bottom-color: var(--ink); }
+
+/* sempre duas colunas, inclusive no celular */
+.cols { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+.cell { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.cell.win { border-color: var(--done); box-shadow: inset 0 0 0 1px var(--done); }
+.cell.editing { grid-column: 1 / -1; }
+.who { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 700; min-width: 0; }
+.who .name { overflow-wrap: anywhere; }
+.who .you { font-weight: 400; color: var(--muted); font-size: .85rem; }
+.badge { font-family: var(--font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--tile-ink); background: var(--done); border-radius: 3px; padding: 1px 6px; font-weight: 500; }
+.badge.tie { background: var(--near); }
+.res { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.res .t { width: 24px; height: 24px; border-radius: 4px; background: var(--tile); flex: none; }
+.res .t.ok { background: var(--done); }
+.res .t.miss { background: var(--miss); }
+.res .val { font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.res .val.none { font-family: var(--font-body); font-weight: 400; font-size: .9rem; color: var(--muted); }
+pre.grid {
+  margin: 0; font-family: var(--font-mono); font-size: .72rem; line-height: 1.2;
+  white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border-radius: 6px;
+  padding: 6px; max-height: 13em; overflow: auto;
+}
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+form.rec { display: grid; gap: 10px; }
+form.rec .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+form.rec label { display: inline-flex; align-items: center; gap: 8px; }
+form.rec input[type="number"] { width: 5.5em; font: inherit; font-size: 16px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+form.rec input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--miss); }
+form.rec textarea { font-family: var(--font-mono); font-size: 16px; width: 100%; min-height: 6.5em; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); resize: vertical; }
+form.rec .err { color: var(--miss); font-size: .88rem; }
+form.rec .hint { color: var(--muted); font-size: .85rem; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+footer { color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Jogos do Dia</h1>
+    <div class="tiles" aria-hidden="true">
+      <span class="g">J</span><span>O</span><span class="y">G</span><span>O</span><span class="g">S</span>
+      <span class="gap"></span>
+      <span>D</span><span class="y">O</span>
+      <span class="gap"></span>
+      <span>D</span><span class="g">I</span><span>A</span>
+    </div>
+    <div class="daynav">
+      <button type="button" id="prev" aria-label="Dia anterior">←</button>
+      <span class="date" id="date"></span>
+      <button type="button" id="next" aria-label="Próximo dia">→</button>
+      <button type="button" id="today">Hoje</button>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="who-pick" id="who-pick" hidden>
+      <p>Quem é você neste aparelho?</p>
+      <div class="row">
+        <button type="button" class="primary" id="pick-A"></button>
+        <button type="button" class="primary" id="pick-B"></button>
+      </div>
+    </div>
+    <div class="me-line" id="me-line" hidden></div>
+    <div class="note" id="note" hidden></div>
+    <div class="toast" id="toast" role="status"></div>
+  </header>
+
+  <main id="list"></main>
+
+  <footer>Em cada jogo, quem acerta com menos tentativas leva o ponto do dia.</footer>
+</div>
+
+<script type="module">
+import { PESSOAS, firebaseConfig } from "./config.js";
+
+// ---- Edite aqui: a lista de jogos (max = número máximo de tentativas; null = sem limite) ----
+const JOGOS = [
+  { id: "termo",    nome: "Termo",    url: "https://term.ooo",        max: 6,    desc: "Uma palavra de 5 letras em 6 tentativas." },
+  { id: "dueto",    nome: "Dueto",    url: "https://term.ooo/2/",     max: 7,    desc: "Duas palavras ao mesmo tempo, 7 tentativas." },
+  { id: "quarteto", nome: "Quarteto", url: "https://term.ooo/4/",     max: 9,    desc: "Quatro palavras ao mesmo tempo, 9 tentativas." },
+  { id: "globle",   nome: "Globle",   url: "https://globle-game.com", max: null, desc: "Ache o país secreto pelo calor no globo. Menos palpites é melhor." },
+  { id: "flagle",   nome: "Flagle",   url: "https://www.flagle.io",   max: 6,    desc: "Monte a bandeira do dia em 6 tentativas." },
+];
+// ---------------------------------------------------------------------------------------------
+
+const LADOS = ["A", "B"];
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, "0");
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dateOf = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+const hoje = () => keyOf(new Date());
+
+const ls = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} },
+};
+
+let store = null;
+let modo = "carregando";      // carregando | remoto | local | erro
+let dias = {};                // { "AAAA-MM-DD": { A: { jogo: {ok, n, txt, at} }, B: {...} } }
+let eu = ls.get("jdd:eu");    // "A" | "B" | null — quem está usando este aparelho
+if (!LADOS.includes(eu)) eu = null;
+let viewDay = hoje();
+let lastToday = viewDay;
+let editing = null;
+let drafts = {};
+let formErr = {};
+let pendingDelete = null;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.textContent = "", 6000);
+}
+
+const resultOf = (p, day, gid) => dias[day]?.[p]?.[gid] || null;
+
+// quem levou o ponto num jogo/dia: "A", "B", "empate" ou null (falta alguém jogar)
+function winnerOf(day, gid) {
+  const a = resultOf("A", day, gid), b = resultOf("B", day, gid);
+  if (!a || !b) return null;
+  const va = a.ok ? a.n : Infinity, vb = b.ok ? b.n : Infinity;
+  if (va === vb) return "empate";
+  return va < vb ? "A" : "B";
+}
+function pontos(days) {
+  const pts = { A: 0, B: 0 };
+  for (const day of days) for (const g of JOGOS) {
+    const w = winnerOf(day, g.id);
+    if (w === "A" || w === "B") pts[w]++;
+  }
+  return pts;
+}
+function fmtRes(g, r) {
+  if (r.ok) return g.max ? `${r.n}/${g.max}` : `${r.n} palpite${r.n > 1 ? "s" : ""}`;
+  return g.max ? `X/${g.max}` : "Desistiu";
+}
+
+// tenta achar o resultado no texto de compartilhar
+function parse(txt, g) {
+  if (g.max) {
+    const m = txt.match(new RegExp(`(?:^|[^\\d])([0-9X](?:\\s*&\\s*[0-9X])*)\\s*\\/\\s*${g.max}(?!\\d)`, "i"));
+    if (m) {
+      const parts = m[1].split("&").map(s => s.trim().toUpperCase());
+      if (parts.includes("X")) return { x: true, n: "" };
+      return { x: false, n: String(Math.max(...parts.map(Number))) };
+    }
+  }
+  const m2 = txt.match(/(\d+)\s*(?:tries|try|guesses|guess|tentativas?|palpites?)/i);
+  if (m2) return { x: false, n: m2[1] };
+  return null;
+}
+
+// ---- onde os resultados ficam guardados ----
+async function criarStore() {
+  if (!firebaseConfig || !firebaseConfig.projectId) return storeLocal();
+  const V = "10.12.2";
+  const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+  const fs = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+  const db = fs.getFirestore(initializeApp(firebaseConfig));
+  const col = fs.collection(db, "dias");
+  return {
+    tipo: "remoto",
+    assinar(cb, onErr) {
+      return fs.onSnapshot(col, snap => { const out = {}; snap.forEach(d => { out[d.id] = d.data(); }); cb(out); }, onErr);
+    },
+    salvar(p, dia, gid, entry) {
+      return fs.setDoc(fs.doc(db, "dias", dia), { [p]: { [gid]: entry } }, { merge: true });
+    },
+    apagar(p, dia, gid) {
+      return fs.updateDoc(fs.doc(db, "dias", dia), { [`${p}.${gid}`]: fs.deleteField() });
+    },
+  };
+}
+function storeLocal() {
+  const KEY = "jdd:dados-teste";
+  const ler = () => { try { return JSON.parse(ls.get(KEY) || "{}"); } catch (e) { return {}; } };
+  let cb = () => {};
+  const avisar = () => cb(ler());
+  window.addEventListener("storage", e => { if (e.key === KEY) avisar(); });
+  const gravar = mut => { const d = ler(); mut(d); ls.set(KEY, JSON.stringify(d)); avisar(); return Promise.resolve(); };
+  return {
+    tipo: "local",
+    assinar(f) { cb = f; avisar(); return () => { cb = () => {}; }; },
+    salvar(p, dia, gid, entry) { return gravar(d => { ((d[dia] = d[dia] || {})[p] = d[dia][p] || {})[gid] = entry; }); },
+    apagar(p, dia, gid) { return gravar(d => { if (d[dia]?.[p]) delete d[dia][p][gid]; }); },
+  };
+}
+
+function falhou(e) {
+  console.error(e);
+  if (e && e.code === "permission-denied") toast("O Firebase recusou a gravação. Confira se as regras do LEIA-ME foram publicadas.");
+  else toast("Não consegui salvar agora. Confira a internet e tente de novo.");
+}
+
+// ---- ações do formulário ----
+function openForm(gid) {
+  const r = resultOf(eu, viewDay, gid);
+  editing = gid;
+  drafts[gid] = { n: r && r.ok ? String(r.n) : "", x: r ? !r.ok : false, txt: r?.txt || "" };
+  delete formErr[gid];
+  pendingDelete = null;
+  render();
+  document.getElementById("t-" + gid)?.focus();
+}
+function submitForm(g) {
+  const d = drafts[g.id];
+  const n = parseInt(d.n, 10);
+  if (!d.x && !(n >= 1 && (!g.max || n <= g.max))) {
+    formErr[g.id] = g.max ? `Coloque um número de 1 a ${g.max}, ou marque "Não acertei".` : `Coloque quantos palpites, ou marque "Desisti".`;
+    render();
+    return;
+  }
+  const entry = { ok: !d.x, n: d.x ? null : n, txt: (d.txt || "").trim().slice(0, 300), at: new Date().toISOString() };
+  editing = null; delete drafts[g.id]; delete formErr[g.id];
+  render();
+  store.salvar(eu, viewDay, g.id, entry).catch(falhou);
+}
+function removeMine(gid) {
+  pendingDelete = null;
+  store.apagar(eu, viewDay, gid).catch(falhou);
+}
+function escolher(p) {
+  eu = p; ls.set("jdd:eu", p);
+  editing = null; pendingDelete = null;
+  render();
+}
+
+// ---- desenho ----
+function render() {
+  // guarda o foco para não perder o que está sendo digitado
+  const act = document.activeElement;
+  const fid = act && act.id;
+  let sel = null;
+  try { if (act && typeof act.selectionStart === "number") sel = [act.selectionStart, act.selectionEnd]; } catch (e) {}
+
+  const label = dateOf(viewDay).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  $("#date").textContent = (viewDay === hoje() ? "Hoje · " : "") + label;
+  $("#next").disabled = viewDay >= hoje();
+  $("#today").hidden = viewDay === hoje();
+
+  // placar
+  const board = $("#board");
+  board.replaceChildren();
+  const comDados = Object.keys(dias).filter(k => JOGOS.some(g => winnerOf(k, g.id)));
+  const blocos = [
+    [viewDay === hoje() ? "Placar de hoje" : "Placar do dia", pontos([viewDay])],
+    [`Placar geral · ${comDados.length} dia${comDados.length === 1 ? "" : "s"}`, pontos(comDados)],
+  ];
+  for (const [titulo, pts] of blocos) {
+    const box = el("div");
+    box.append(el("span", "label", titulo));
+    const s = el("div", "score");
+    const a = el("span", null, PESSOAS.A + " "); a.append(el("b", null, String(pts.A)));
+    const b = el("span", null, PESSOAS.B + " "); b.append(el("b", null, String(pts.B)));
+    s.append(a, el("span", "x", "×"), b);
+    box.append(s);
+    board.append(box);
+  }
+
+  // quem sou eu
+  $("#pick-A").textContent = `Sou ${PESSOAS.A}`;
+  $("#pick-B").textContent = `Sou ${PESSOAS.B}`;
+  $("#who-pick").hidden = !!eu;
+  const meLine = $("#me-line");
+  meLine.hidden = !eu;
+  meLine.replaceChildren();
+  if (eu) {
+    meLine.append("Neste aparelho você é ", el("strong", null, PESSOAS[eu]));
+    const troca = el("button", "link", "trocar");
+    troca.type = "button"; troca.id = "trocar";
+    troca.addEventListener("click", () => { eu = null; ls.set("jdd:eu", null); editing = null; render(); });
+    meLine.append(troca);
+  }
+
+  // aviso
+  const note = $("#note");
+  let msg = "";
+  if (modo === "carregando") msg = "Carregando resultados…";
+  else if (modo === "local") msg = "Modo de teste: o Firebase ainda não foi configurado, então os resultados ficam salvos só neste aparelho.";
+  else if (modo === "erro") msg = "Não consegui conectar ao Firebase. Confira a configuração em config.js e a internet, e recarregue a página.";
+  note.textContent = msg;
+  note.hidden = !msg;
+
+  // jogos
+  const list = $("#list");
+  list.replaceChildren();
+  for (const g of JOGOS) {
+    const card = el("article", "game");
+    const head = el("div", "game-head");
+    head.append(el("h2", null, g.nome), el("span", "desc", g.desc));
+    const a = el("a", "play", "Jogar ↗");
+    a.href = g.url; a.target = "_blank"; a.rel = "noopener";
+    head.append(a);
+    card.append(head);
+
+    const w = winnerOf(viewDay, g.id);
+    const cols = el("div", "cols");
+    for (const p of LADOS) cols.append(cell(g, p, w));
+    card.append(cols);
+    list.append(card);
+  }
+
+  if (fid) {
+    const back = document.getElementById(fid);
+    if (back && back !== document.activeElement) {
+      back.focus();
+      if (sel) try { back.setSelectionRange(sel[0], sel[1]); } catch (e) {}
+    }
+  }
+}
+
+function cell(g, p, w) {
+  const meu = p === eu;
+  const r = resultOf(p, viewDay, g.id);
+  const emEdicao = meu && editing === g.id;
+  const c = el("div", "cell" + (w === p ? " win" : "") + (emEdicao ? " editing" : ""));
+  const who = el("div", "who");
+  who.append(el("span", "name", PESSOAS[p]));
+  if (meu) who.append(el("span", "you", "(você)"));
+  if (w === p) who.append(el("span", "badge", "levou"));
+  if (w === "empate") who.append(el("span", "badge tie", "empate"));
+  c.append(who);
+
+  if (emEdicao) { c.append(form(g)); return c; }
+
+  const res = el("div", "res");
+  res.append(el("i", "t" + (r ? (r.ok ? " ok" : " miss") : "")));
+  res.append(r ? el("span", "val", fmtRes(g, r)) : el("span", "val none", "Ainda não jogou"));
+  c.append(res);
+  if (r && r.txt) c.append(el("pre", "grid", r.txt));
+
+  if (meu && modo !== "carregando" && modo !== "erro") {
+    const acts = el("div", "actions");
+    const b = el("button", r ? null : "primary", r ? "Editar" : "Registrar");
+    b.type = "button"; b.id = `rec-${g.id}`;
+    b.addEventListener("click", () => openForm(g.id));
+    acts.append(b);
+    if (r) {
+      const confirmar = pendingDelete === g.id;
+      const del = el("button", "danger", confirmar ? "Confirmar" : "Apagar");
+      del.type = "button"; del.id = `del-${g.id}`;
+      del.addEventListener("click", () => {
+        if (confirmar) removeMine(g.id);
+        else { pendingDelete = g.id; render(); }
+      });
+      acts.append(del);
+    }
+    c.append(acts);
+  }
+  return c;
+}
+
+function form(g) {
+  const d = drafts[g.id];
+  const f = el("form", "rec");
+  f.noValidate = true;
+
+  const t = el("textarea");
+  t.id = `t-${g.id}`;
+  t.placeholder = "Cole aqui o texto de compartilhar do jogo (opcional)";
+  t.value = d.txt;
+  t.setAttribute("aria-label", "Texto de compartilhar");
+
+  const row = el("div", "row");
+  const ln = el("label", null, g.max ? "Tentativas" : "Palpites");
+  const n = el("input");
+  n.type = "number"; n.id = `n-${g.id}`; n.min = "1"; if (g.max) n.max = String(g.max);
+  n.inputMode = "numeric"; n.value = d.n; n.disabled = d.x;
+  ln.append(n);
+  const lx = el("label");
+  const x = el("input");
+  x.type = "checkbox"; x.id = `x-${g.id}`; x.checked = d.x;
+  lx.append(x, document.createTextNode(g.max ? "Não acertei" : "Desisti"));
+  row.append(ln, lx);
+
+  t.addEventListener("input", () => {
+    d.txt = t.value;
+    const p = parse(t.value, g);
+    if (p) { d.x = p.x; d.n = p.n; x.checked = p.x; n.value = p.n; n.disabled = p.x; }
+  });
+  n.addEventListener("input", () => { d.n = n.value; });
+  x.addEventListener("change", () => { d.x = x.checked; n.disabled = x.checked; });
+
+  f.append(t, row);
+  if (formErr[g.id]) f.append(el("div", "err", formErr[g.id]));
+  else f.append(el("div", "hint", "Ao colar o texto, o número de tentativas é preenchido sozinho quando dá."));
+
+  const acts = el("div", "actions");
+  const save = el("button", "primary", "Salvar"); save.type = "submit"; save.id = `save-${g.id}`;
+  const cancel = el("button", null, "Cancelar"); cancel.type = "button"; cancel.id = `cancel-${g.id}`;
+  cancel.addEventListener("click", () => { editing = null; delete drafts[g.id]; delete formErr[g.id]; render(); });
+  acts.append(save, cancel);
+  f.append(acts);
+  f.addEventListener("submit", e => { e.preventDefault(); submitForm(g); });
+  return f;
+}
+
+// ---- navegação ----
+function irPara(k) { viewDay = k; editing = null; pendingDelete = null; render(); }
+$("#prev").addEventListener("click", () => { const d = dateOf(viewDay); d.setDate(d.getDate() - 1); irPara(keyOf(d)); });
+$("#next").addEventListener("click", () => { const d = dateOf(viewDay); d.setDate(d.getDate() + 1); if (keyOf(d) <= hoje()) irPara(keyOf(d)); });
+$("#today").addEventListener("click", () => irPara(hoje()));
+$("#pick-A").addEventListener("click", () => escolher("A"));
+$("#pick-B").addEventListener("click", () => escolher("B"));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  const t = hoje();
+  if (t !== lastToday) { if (viewDay === lastToday) viewDay = t; lastToday = t; render(); }
+});
+
+// ---- início ----
+render();
+try {
+  store = await criarStore();
+  modo = store.tipo;
+  render();
+  store.assinar(d => { dias = d; render(); }, e => { console.error(e); modo = "erro"; render(); });
+} catch (e) {
+  console.error(e);
+  modo = "erro";
+  render();
+}
+</script>
+</body>
+</html>

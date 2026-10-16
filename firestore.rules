@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Regras do banco do Jogos do Dia.
+// Qualquer pessoa com o link lê e grava, mas só no formato que o site usa:
+// um documento por dia em "dias", com as chaves A e B, e só os 5 jogos.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function jogos() {
+      return ['termo', 'dueto', 'quarteto', 'globle', 'flagle'];
+    }
+
+    function resultadoOk(r) {
+      return r is map
+        && r.keys().hasOnly(['ok', 'n', 'txt', 'at'])
+        && r.ok is bool
+        && (r.n == null || (r.n is int && r.n >= 1 && r.n <= 500))
+        && (!('txt' in r) || (r.txt is string && r.txt.size() <= 300))
+        && (!('at' in r) || (r.at is string && r.at.size() <= 40));
+    }
+
+    function ladoOk(s) {
+      return s is map
+        && s.keys().hasOnly(jogos())
+        && (!('termo' in s)    || resultadoOk(s.termo))
+        && (!('dueto' in s)    || resultadoOk(s.dueto))
+        && (!('quarteto' in s) || resultadoOk(s.quarteto))
+        && (!('globle' in s)   || resultadoOk(s.globle))
+        && (!('flagle' in s)   || resultadoOk(s.flagle));
+    }
+
+    match /dias/{dia} {
+      allow read: if true;
+      allow create, update: if dia.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly(['A', 'B'])
+        && (!('A' in request.resource.data) || ladoOk(request.resource.data.A))
+        && (!('B' in request.resource.data) || ladoOk(request.resource.data.B));
+      allow delete: if false;
+    }
+
+    // todo o resto fica fechado
+    match /{caminho=**} {
+      allow read, write: if false;
+    }
+  }
+}
