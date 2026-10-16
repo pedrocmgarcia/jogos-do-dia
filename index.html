@@ -112,6 +112,15 @@ button.link { border: 0; padding: 0; min-height: 0; color: inherit; text-decorat
 .quick-preview { display: grid; gap: 8px; }
 .quick-sum { font-family: var(--font-display); font-weight: 800; font-size: 1.2rem; }
 
+/* resumo do dia para compartilhar; fica em destaque quando os 5 jogos foram registrados */
+.share { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+.share.completo { border: 2px solid var(--done); }
+.share-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.share-title { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; min-width: 0; }
+.share-title small { font-family: var(--font-body); font-weight: 400; font-size: .85rem; color: var(--muted); }
+pre.grid.share-preview { font-size: .85rem; line-height: 1.35; max-height: none; }
+.share #share-msg:empty { display: none; }
+
 .err { color: var(--miss); font-size: .88rem; }
 .hint { color: var(--muted); font-size: .85rem; }
 .flash { font-size: .9rem; font-weight: 700; }
@@ -215,6 +224,14 @@ footer { color: var(--muted); font-size: .85rem; }
       <textarea id="quick-txt" rows="3" placeholder="Cole aqui o texto de compartilhar de qualquer um dos 5 jogos"></textarea>
       <div class="quick-preview" id="quick-preview" aria-live="polite"></div>
     </section>
+    <section class="share" id="share" hidden>
+      <div class="share-head">
+        <span class="share-title" id="share-title"></span>
+        <button type="button" id="share-btn">Compartilhar resumo</button>
+      </div>
+      <pre class="grid share-preview" id="share-preview" hidden></pre>
+      <div class="flash ok" id="share-msg" role="status" aria-live="polite"></div>
+    </section>
   </header>
 
   <main id="list"></main>
@@ -228,11 +245,12 @@ import { PESSOAS, firebaseConfig } from "./config.js";
 
 // ---- Edite aqui: a lista de jogos (max = número máximo de tentativas; null = sem limite) ----
 // logo = ícone da aba do site do jogo, guardado em logos/; marca = numerozinho no canto do logo.
+// palavras = quantas palavras o jogo tem (Dueto e Quarteto mostram uma tentativa em emoji por palavra).
 // RECONHECE diz como achar o jogo no texto de compartilhar; a ordem importa (Quarteto e Dueto antes do Termo).
 const JOGOS = [
   { id: "termo",    nome: "Termo",    url: "https://term.ooo",        max: 6,    logo: "logos/termo.png",  desc: "Uma palavra de 5 letras em 6 tentativas." },
-  { id: "dueto",    nome: "Dueto",    url: "https://term.ooo/2/",     max: 7,    logo: "logos/termo.png",  marca: "2", desc: "Duas palavras ao mesmo tempo, 7 tentativas." },
-  { id: "quarteto", nome: "Quarteto", url: "https://term.ooo/4/",     max: 9,    logo: "logos/termo.png",  marca: "4", desc: "Quatro palavras ao mesmo tempo, 9 tentativas." },
+  { id: "dueto",    nome: "Dueto",    url: "https://term.ooo/2/",     max: 7,    logo: "logos/termo.png",  marca: "2", palavras: 2, desc: "Duas palavras ao mesmo tempo, 7 tentativas." },
+  { id: "quarteto", nome: "Quarteto", url: "https://term.ooo/4/",     max: 9,    logo: "logos/termo.png",  marca: "4", palavras: 4, desc: "Quatro palavras ao mesmo tempo, 9 tentativas." },
   { id: "globle",   nome: "Globle",   url: "https://globle-game.com", max: null, logo: "logos/globle.png", desc: "Ache o país secreto pelo calor no globo. Menos palpites é melhor." },
   { id: "flagle",   nome: "Flagle",   url: "https://www.flagle.io",   max: 6,    logo: "logos/flagle.png", desc: "Monte a bandeira do dia em 6 tentativas." },
 ];
@@ -337,8 +355,22 @@ function detectarJogo(txt) {
   for (const [id, re] of RECONHECE) if (re.test(txt)) return id;
   return null;
 }
+// Dueto e Quarteto: cada palavra vem como emoji de número (1️⃣…9️⃣ = tentativa em que acertou) ou 🟥 (errou),
+// ex.: "term.ooo/2 #1697\n\n5️⃣4️⃣" ou "term.ooo/4 #1697\n\n6️⃣8️⃣\n9️⃣🟥". O resultado do jogo é a última palavra acertada.
+const EMOJI_TENTATIVA = /([0-9])️?⃣|\u{1F7E5}/gu;
+function parseEmoji(txt, palavras) {
+  const toks = [...txt.matchAll(EMOJI_TENTATIVA)].map(m => m[1] ? Number(m[1]) : "X").slice(0, palavras);
+  if (toks.length < palavras) return null;
+  if (toks.includes("X")) return { x: true, n: "" };
+  return { x: false, n: String(Math.max(...toks)) };
+}
+
 // tenta achar o resultado no texto de compartilhar
 function parse(txt, g) {
+  if (g.palavras) {
+    const e = parseEmoji(txt, g.palavras);
+    if (e) return e;
+  }
   if (g.max) {
     const m = txt.match(new RegExp(`(?:^|[^\\d])([0-9X](?:\\s*&\\s*[0-9X])*)\\s*\\/\\s*${g.max}(?!\\d)`, "i"));
     if (m) {
@@ -355,6 +387,36 @@ function parse(txt, g) {
   return null;
 }
 function valido(g, n) { return n >= 1 && (!g.max || n <= g.max); }
+
+// as linhas de quadradinhos (🟩🟨⬛…) do texto de compartilhar de um jogo; tira o "= 3" do Globle
+const QUADRADO = "[\\u{1F7E5}-\\u{1F7EB}\\u2B1B\\u2B1C]\\uFE0F?";
+const LINHA_GRADE = new RegExp(`^\\s*((?:${QUADRADO}|[ \\t])*${QUADRADO})[ \\t]*(?:=\\s*\\d+)?\\s*$`, "u");
+function gradeDe(txt) {
+  return (txt || "").split("\n").map(l => l.match(LINHA_GRADE)).filter(Boolean).map(m => m[1]);
+}
+
+// texto do resumo do dia para mandar para a outra pessoa, no estilo dos próprios jogos:
+// cada jogo com o resultado e, logo abaixo, as tentativas (a grade que o jogo compartilhou)
+function resumoTexto(day, url) {
+  const meus = JOGOS.map(g => [g, resultOf(eu, day, g.id)]);
+  const quad = r => !r ? "⬜" : r.ok ? "🟩" : "🟥";
+  const acertos = meus.filter(([, r]) => r && r.ok).length;
+  const blocos = meus.map(([g, r]) => [`${quad(r)} ${g.nome} ${r ? fmtRes(g, r) : "não jogou"}`, ...gradeDe(r?.txt)]);
+  const temGrade = blocos.some(b => b.length > 1);
+  const linhas = [
+    `Jogos do Dia · ${day === hoje() ? "hoje, " : ""}${curto(day)}`,
+    `${meus.map(([, r]) => quad(r)).join("")}  ${acertos} de ${JOGOS.length}`,
+    "",
+    blocos.map(b => b.join("\n")).join(temGrade ? "\n\n" : "\n"),
+  ];
+  const o = eu === "A" ? "B" : "A";
+  if (JOGOS.some(g => resultOf(o, day, g.id))) {
+    const pts = pontos([day]);
+    linhas.push("", `Placar do dia: ${PESSOAS[eu]} ${pts[eu]} × ${pts[o]} ${PESSOAS[o]}`);
+  }
+  linhas.push("", url);
+  return linhas.join("\n");
+}
 
 // ---- onde os resultados ficam guardados ----
 async function criarStore() {
@@ -560,6 +622,47 @@ $("#quick-paste").addEventListener("click", async () => {
   renderQuick();
 });
 
+// ---- resumo do dia para compartilhar ----
+const urlDoSite = () => location.origin + location.pathname;
+function renderShare() {
+  const box = $("#share");
+  const feitos = eu ? JOGOS.filter(g => resultOf(eu, viewDay, g.id)).length : 0;
+  box.hidden = !eu || (modo !== "remoto" && modo !== "local") || feitos === 0;
+  if (box.hidden) return;
+  const completo = feitos === JOGOS.length;
+  box.classList.toggle("completo", completo);
+  const titulo = $("#share-title");
+  titulo.replaceChildren();
+  if (completo) titulo.append(viewDay === hoje() ? "Você jogou os 5 de hoje!" : `Você jogou os 5 de ${curto(viewDay)}!`);
+  else { titulo.append("Resumo do dia "); titulo.append(el("small", null, `(${feitos} de ${JOGOS.length})`)); }
+  $("#share-btn").className = completo ? "primary" : "";
+  const prev = $("#share-preview");
+  prev.hidden = !completo;
+  if (completo) prev.textContent = resumoTexto(viewDay, urlDoSite());
+}
+function shareMsg(msg) {
+  const m = $("#share-msg");
+  m.textContent = msg;
+  clearTimeout(shareMsg.t); shareMsg.t = setTimeout(() => m.textContent = "", 5000);
+}
+$("#share-btn").addEventListener("click", async () => {
+  const texto = resumoTexto(viewDay, urlDoSite());
+  // no celular abre a lista de apps (WhatsApp, Mensagens…); no computador, copia
+  if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+    try { await navigator.share({ text: texto }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  try {
+    await navigator.clipboard.writeText(texto);
+    shareMsg("✓ Copiado. Agora é só colar na conversa.");
+  } catch (e) {
+    const prev = $("#share-preview");
+    prev.textContent = texto; prev.hidden = false;
+    getSelection().selectAllChildren(prev);
+    shareMsg("Não deu para copiar sozinho. O texto está selecionado acima: copie e cole na conversa.");
+  }
+});
+
 // ---- desenho ----
 function render() {
   // guarda o foco para não perder o que está sendo digitado
@@ -614,6 +717,7 @@ function render() {
   note.hidden = !msg;
 
   renderQuick();
+  renderShare();
 
   // jogos
   const list = $("#list");
