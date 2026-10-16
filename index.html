@@ -102,7 +102,7 @@ button.link { border: 0; padding: 0; min-height: 0; color: inherit; text-decorat
 
 /* campo único para colar o resultado de qualquer jogo */
 .quick { background: var(--surface); border: 2px solid var(--near); border-radius: 10px; padding: 12px; display: grid; gap: 8px; }
-.quick-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.quick-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .quick-head label { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; }
 .quick textarea, form.rec textarea {
   font-family: var(--font-mono); font-size: 16px; width: 100%; padding: 8px;
@@ -219,7 +219,11 @@ footer { color: var(--muted); font-size: .85rem; }
     <section class="quick" id="quick" hidden>
       <div class="quick-head">
         <label for="quick-txt">Colar resultado</label>
-        <button type="button" id="quick-paste">Colar</button>
+        <div class="actions">
+          <button type="button" id="quick-paste">Colar</button>
+          <button type="button" id="quick-img-btn">Imagem do Quarteto</button>
+        </div>
+        <input type="file" id="quick-img" accept="image/*" hidden>
       </div>
       <textarea id="quick-txt" rows="3" placeholder="Cole aqui o texto de compartilhar de qualquer um dos 5 jogos"></textarea>
       <div class="quick-preview" id="quick-preview" aria-live="polite"></div>
@@ -387,12 +391,75 @@ function parse(txt, g) {
   return null;
 }
 function valido(g, n) { return n >= 1 && (!g.max || n <= g.max); }
+// o texto guardado tem limite (as regras do Firestore aceitam até 4000); 900 cabe a grade inteira do Quarteto
+// e não corta um emoji no meio
+function cortaTexto(s) {
+  let r = s.slice(0, 900);
+  if (/[\uD800-\uDBFF]$/.test(r)) r = r.slice(0, -1);
+  return r;
+}
 
 // as linhas de quadradinhos (🟩🟨⬛…) do texto de compartilhar de um jogo; tira o "= 3" do Globle
 const QUADRADO = "[\\u{1F7E5}-\\u{1F7EB}\\u2B1B\\u2B1C]\\uFE0F?";
 const LINHA_GRADE = new RegExp(`^\\s*((?:${QUADRADO}|[ \\t])*${QUADRADO})[ \\t]*(?:=\\s*\\d+)?\\s*$`, "u");
 function gradeDe(txt) {
-  return (txt || "").split("\n").map(l => l.match(LINHA_GRADE)).filter(Boolean).map(m => m[1]);
+  const out = [];
+  let separa = false;   // mantém uma linha em branco entre blocos de grade (ex.: as duas metades do Quarteto)
+  for (const l of (txt || "").split("\n")) {
+    const m = l.match(LINHA_GRADE);
+    if (m) { if (separa && out.length) out.push(""); out.push(m[1]); separa = false; }
+    else separa = true;
+  }
+  return out;
+}
+
+// ---- imagem do Quarteto ----
+// O term.ooo compartilha o Quarteto como imagem (canvas 1024×576 em escala 2, ou seja 512×288 "lógicos"):
+// 4 grades lado a lado, até 9 linhas, quadrados verde #3AA394, amarelo #D3AD69, escuro #312A2C sobre fundo #6E5C62.
+// lerQuarteto recebe uma função pixel(x, y) -> [r, g, b] e devolve as grades e a tentativa de cada palavra.
+const Q_CORES = [["🟩", [0x3a, 0xa3, 0x94]], ["🟨", [0xd3, 0xad, 0x69]], ["⬛", [0x31, 0x2a, 0x2c]], ["", [0x6e, 0x5c, 0x62]]];
+function lerQuarteto(pixel, W, H) {
+  if (!W || !H || Math.abs(W / H - 512 / 288) > 0.03) return null;
+  const k = W / 512;
+  const media = (x, y) => {           // média de 3×3 pontos em volta do centro, para aguentar compressão
+    const soma = [0, 0, 0];
+    for (const dx of [-1, 0, 1]) for (const dy of [-1, 0, 1]) {
+      const p = pixel(Math.min(W - 1, Math.max(0, x + dx * k)), Math.min(H - 1, Math.max(0, y + dy * k)));
+      soma[0] += p[0]; soma[1] += p[1]; soma[2] += p[2];
+    }
+    return soma.map(v => v / 9);
+  };
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const cor = rgb => Q_CORES.reduce((m, c) => dist(rgb, c[1]) < dist(rgb, m[1]) ? c : m);
+  if (dist(media(6 * k, 150 * k), Q_CORES[3][1]) > 40) return null;   // o fundo tem que ser o do term.ooo
+
+  const bc = 4, Bc = 9, t = Math.min(512 / (5 * bc + 0.75 * (bc + 1)), 188 / Bc);
+  const n = 60 + (188 - Bc * t) / 2, s = (512 - 5 * bc * t) / (bc + 1);
+  const grades = [], tentativas = [];
+  for (let u = 0; u < bc; u++) {
+    const linhas = [];
+    for (let l = 0; l < Bc; l++) {
+      const cel = [];
+      for (let g = 0; g < 5; g++) cel.push(cor(media((s + u * (s + 5 * t) + g * t + 0.45 * t) * k, (n + l * t + 0.45 * t) * k))[0]);
+      if (cel.every(c => c === "")) break;
+      linhas.push(cel.map(c => c || "⬜").join(""));
+    }
+    grades.push(linhas);
+    tentativas.push(linhas.length && linhas[linhas.length - 1] === "🟩🟩🟩🟩🟩" ? linhas.length : "X");
+  }
+  if (grades.every(g => !g.length)) return null;
+  return { grades, tentativas };
+}
+// monta um texto no mesmo formato do term.ooo, para o resto do site tratar igual ao texto colado
+function textoQuarteto({ grades, tentativas }) {
+  const kc = v => v === "X" ? "🟥" : `${v}️⃣`;
+  const vazio = "⬛⬛⬛⬛⬛";   // igual ao term.ooo: palavra que terminou antes é completada com ⬛
+  const lado = (a, b) => Array.from({ length: Math.max(a.length, b.length) }, (_, i) => `${a[i] || vazio}  ${b[i] || vazio}`);
+  return [
+    "term.ooo/4 (imagem)", "",
+    kc(tentativas[0]) + kc(tentativas[1]), kc(tentativas[2]) + kc(tentativas[3]), "",
+    ...lado(grades[0], grades[1]), "", ...lado(grades[2], grades[3]),
+  ].join("\n");
 }
 
 // texto do resumo do dia para mandar para a outra pessoa, no estilo dos próprios jogos:
@@ -496,7 +563,7 @@ async function submitForm(g) {
     return;
   }
   const day = viewDay;
-  const entry = { ok: !d.x, n: d.x ? null : n, txt: (d.txt || "").trim().slice(0, 300), at: new Date().toISOString() };
+  const entry = { ok: !d.x, n: d.x ? null : n, txt: cortaTexto((d.txt || "").trim()), at: new Date().toISOString() };
   saving[g.id] = "salvando"; delete formErr[g.id];
   render();
   const err = await gravar(g.id, day, entry, () => { if (saving[g.id]) { saving[g.id] = "lento"; render(); } });
@@ -550,7 +617,8 @@ function renderQuick() {
   if (quick.done) { prev.append(el("div", "flash ok", quick.done)); return; }
   const q = quickEntender();
   if (!q) {
-    prev.append(el("div", "hint", quick.info || "O site descobre sozinho de qual jogo é o texto e quantas tentativas você usou."));
+    prev.append(el("div", quick.info?.err ? "err" : "hint", quick.info?.msg ||
+      "O site descobre sozinho de qual jogo é o texto e quantas tentativas você usou. No Quarteto, use a imagem que o jogo compartilha."));
     return;
   }
   if (!q.g) {
@@ -590,7 +658,7 @@ async function quickSalvar(q) {
   if (quick.saving) return;
   quick.saving = true; quick.err = null; quick.lento = false;
   renderQuick();
-  const entry = { ...q.entry, txt: q.txt.slice(0, 300), at: new Date().toISOString() };
+  const entry = { ...q.entry, txt: cortaTexto(q.txt), at: new Date().toISOString() };
   const err = await gravar(q.g.id, viewDay, entry, () => { if (quick.saving) { quick.lento = true; renderQuick(); } });
   quick.saving = false; quick.lento = false;
   if (err) { quick.err = err; renderQuick(); return; }        // o texto continua na caixa
@@ -616,10 +684,44 @@ $("#quick-paste").addEventListener("click", async () => {
     $("#quick-txt").value = t;
     Object.assign(quick, { err: null, done: null, info: null });
   } catch (e) {
-    quick.info = "Não deu para colar pelo botão. Toque e segure na caixa acima e escolha Colar.";
+    quick.info = { msg: "Não deu para colar pelo botão. Toque e segure na caixa acima e escolha Colar." };
     $("#quick-txt").focus();
   }
   renderQuick();
+});
+
+// imagem do Quarteto: escolhida da galeria ou colada na caixa
+async function usarImagem(file) {
+  Object.assign(quick, { err: null, done: null, info: null });
+  try {
+    const bmp = await createImageBitmap(file);
+    const c = document.createElement("canvas");
+    c.width = bmp.width; c.height = bmp.height;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0);
+    const d = ctx.getImageData(0, 0, c.width, c.height).data;
+    const W = c.width;
+    const r = lerQuarteto((x, y) => { const i = (Math.floor(y) * W + Math.floor(x)) * 4; return [d[i], d[i + 1], d[i + 2]]; }, c.width, c.height);
+    if (!r) {
+      quick.info = { msg: "Essa imagem não parece ser a do Quarteto. Use a imagem que o term.ooo/4 gera ao compartilhar, sem cortar.", err: true };
+    } else {
+      $("#quick-txt").value = textoQuarteto(r);
+    }
+  } catch (e) {
+    console.error(e);
+    quick.info = { msg: "Não consegui abrir essa imagem. Tente de novo ou escolha outra.", err: true };
+  }
+  renderQuick();
+}
+$("#quick-img-btn").addEventListener("click", () => $("#quick-img").click());
+$("#quick-img").addEventListener("change", e => {
+  const f = e.target.files?.[0];
+  e.target.value = "";
+  if (f) usarImagem(f);
+});
+$("#quick-txt").addEventListener("paste", e => {
+  const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith("image/"));
+  if (f) { e.preventDefault(); usarImagem(f); }
 });
 
 // ---- resumo do dia para compartilhar ----
