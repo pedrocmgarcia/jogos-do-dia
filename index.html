@@ -146,7 +146,13 @@ main { display: grid; gap: 14px; }
 .game.compacto { padding: 10px 14px; }
 .game.compacto .game-head { align-items: center; flex-wrap: nowrap; }
 .ordem-btns { margin-left: auto; display: flex; gap: 6px; flex: none; }
-.ordem-btns button { min-width: 44px; padding-inline: 10px; font-size: 1.1rem; }
+.ordem-btns button { min-width: 44px; padding-inline: 10px; font-size: 1.1rem; display: grid; place-items: center; }
+.ordem-btns button svg { width: 20px; height: 20px; display: block; }
+.ordem-btns .olho[aria-pressed="true"] { color: var(--muted); border-style: dashed; }
+.game.compacto.oculto { background: transparent; border-style: dashed; }
+.game.compacto.oculto h2 { color: var(--muted); }
+.game.compacto.oculto .logo { opacity: .45; filter: grayscale(1); }
+.game.compacto h2 { min-width: 0; overflow-wrap: anywhere; }
 .game { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 12px; min-width: 0; scroll-margin-top: 16px; }
 .game-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
 .game-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; display: flex; align-items: center; gap: 10px; }
@@ -247,9 +253,10 @@ footer { color: var(--muted); font-size: .85rem; }
   </header>
 
   <div class="list-tools">
-    <span class="hint" id="ordem-hint" hidden>Use as setas para mudar a ordem. Vale só neste aparelho.</span>
-    <button type="button" class="link" id="ordem-padrao" hidden>Voltar à ordem padrão</button>
-    <button type="button" id="organizar">Mudar ordem</button>
+    <span class="hint" id="ordem-hint" hidden>Use as setas para mudar a ordem e o olho para esconder ou mostrar um jogo. Vale só neste aparelho.</span>
+    <span class="hint" id="ocultos-info" hidden></span>
+    <button type="button" class="link" id="ordem-padrao" hidden>Voltar ao padrão</button>
+    <button type="button" id="organizar">Organizar jogos</button>
   </div>
 
   <main id="list"></main>
@@ -301,6 +308,15 @@ function ordenarJogos(salva) {
   return out;
 }
 const jogosNaOrdem = () => ordenarJogos(ordem);
+// jogos escondidos neste aparelho (botão de olho em "Organizar jogos"); só aceita jogos conhecidos e nunca esconde todos
+function lerOcultos(salvo) {
+  let v;
+  try { v = JSON.parse(salvo); } catch (e) { return []; }
+  if (!Array.isArray(v)) return [];
+  const ids = [...new Set(v.filter(id => jogo(id)))];
+  return ids.length >= JOGOS.length ? [] : ids;
+}
+const jogosVisiveis = () => jogosNaOrdem().filter(g => !ocultos.includes(g.id));
 function logoDe(g) {
   const box = document.createElement("span");
   box.className = "logo";
@@ -323,7 +339,8 @@ let dias = {};                // { "AAAA-MM-DD": { A: { jogo: {ok, n, txt, at} }
 let eu = ls.get("jdd:eu");    // "A" | "B" | null — quem está usando este aparelho
 if (!LADOS.includes(eu)) eu = null;
 let ordem = (() => { try { return JSON.parse(ls.get("jdd:ordem")); } catch (e) { return null; } })();
-let organizando = false;      // modo "Mudar ordem"
+let ocultos = lerOcultos(ls.get("jdd:ocultos"));
+let organizando = false;      // modo "Organizar jogos"
 let viewDay = hoje();
 let lastToday = viewDay;
 let editing = null;
@@ -493,14 +510,14 @@ function textoQuarteto({ grades, tentativas }) {
 // texto do resumo do dia para mandar para a outra pessoa, no estilo dos próprios jogos:
 // cada jogo com o resultado e, logo abaixo, as tentativas (a grade que o jogo compartilhou)
 function resumoTexto(day, url) {
-  const meus = jogosNaOrdem().map(g => [g, resultOf(eu, day, g.id)]);
+  const meus = jogosVisiveis().map(g => [g, resultOf(eu, day, g.id)]);
   const quad = r => !r ? "⬜" : r.ok ? "🟩" : "🟥";
   const acertos = meus.filter(([, r]) => r && r.ok).length;
   const blocos = meus.map(([g, r]) => [`${quad(r)} ${g.nome} ${r ? fmtRes(g, r) : "não jogou"}`, ...gradeDe(r?.txt)]);
   const temGrade = blocos.some(b => b.length > 1);
   const linhas = [
     `Jogos do Dia · ${day === hoje() ? "hoje, " : ""}${curto(day)}`,
-    `${meus.map(([, r]) => quad(r)).join("")}  ${acertos} de ${JOGOS.length}`,
+    `${meus.map(([, r]) => quad(r)).join("")}  ${acertos} de ${meus.length}`,
     "",
     blocos.map(b => b.join("\n")).join(temGrade ? "\n\n" : "\n"),
   ];
@@ -756,15 +773,17 @@ $("#quick-txt").addEventListener("paste", e => {
 const urlDoSite = () => location.origin + location.pathname;
 function renderShare() {
   const box = $("#share");
-  const feitos = eu ? JOGOS.filter(g => resultOf(eu, viewDay, g.id)).length : 0;
+  const vis = jogosVisiveis();
+  const feitos = eu ? vis.filter(g => resultOf(eu, viewDay, g.id)).length : 0;
   box.hidden = !eu || (modo !== "remoto" && modo !== "local") || feitos === 0;
   if (box.hidden) return;
-  const completo = feitos === JOGOS.length;
+  const completo = feitos === vis.length;
   box.classList.toggle("completo", completo);
   const titulo = $("#share-title");
   titulo.replaceChildren();
-  if (completo) titulo.append(viewDay === hoje() ? "Você jogou os 5 de hoje!" : `Você jogou os 5 de ${curto(viewDay)}!`);
-  else { titulo.append("Resumo do dia "); titulo.append(el("small", null, `(${feitos} de ${JOGOS.length})`)); }
+  const quando = viewDay === hoje() ? "de hoje" : `de ${curto(viewDay)}`;
+  if (completo) titulo.append(vis.length === 1 ? `Você jogou o jogo ${quando}!` : `Você jogou os ${vis.length} ${quando}!`);
+  else { titulo.append("Resumo do dia "); titulo.append(el("small", null, `(${feitos} de ${vis.length})`)); }
   $("#share-btn").className = completo ? "primary" : "";
   const prev = $("#share-preview");
   prev.hidden = !completo;
@@ -852,19 +871,31 @@ function render() {
   // jogos
   const list = $("#list");
   list.replaceChildren();
-  $("#organizar").textContent = organizando ? "Pronto" : "Mudar ordem";
+  $("#organizar").textContent = organizando ? "Pronto" : "Organizar jogos";
   $("#organizar").className = organizando ? "primary" : "";
   $("#ordem-hint").hidden = !organizando;
-  $("#ordem-padrao").hidden = !organizando || !ordem;
+  $("#ordem-padrao").hidden = !organizando || (!ordem && !ocultos.length);
+  const info = $("#ocultos-info");
+  info.hidden = organizando || !ocultos.length;
+  info.textContent = ocultos.length === 1 ? "1 jogo escondido" : `${ocultos.length} jogos escondidos`;
   const lista = jogosNaOrdem();
+  const visiveis = lista.filter(g => !ocultos.includes(g.id)).length;
   if (organizando) {
     lista.forEach((g, i) => {
-      const card = el("article", "game compacto");
+      const escondido = ocultos.includes(g.id);
+      const card = el("article", "game compacto" + (escondido ? " oculto" : ""));
       const head = el("div", "game-head");
       const h2 = el("h2");
       if (g.logo) h2.append(logoDe(g));
       h2.append(g.nome);
       const btns = el("div", "ordem-btns");
+      const olho = botao("", `olho-${g.id}`, "olho", () => alternarOculto(g.id));
+      olho.innerHTML = escondido ? ICONE_OLHO_FECHADO : ICONE_OLHO;
+      olho.setAttribute("aria-pressed", String(escondido));
+      olho.setAttribute("aria-label", escondido ? `Mostrar ${g.nome}` : `Esconder ${g.nome}`);
+      olho.title = escondido ? "Mostrar" : "Esconder";
+      olho.disabled = !escondido && visiveis === 1;   // sempre fica pelo menos um jogo
+      btns.append(olho);
       const sobe = botao("↑", `sobe-${g.id}`, null, () => mover(g.id, -1));
       const desce = botao("↓", `desce-${g.id}`, null, () => mover(g.id, 1));
       sobe.setAttribute("aria-label", `Subir ${g.nome}`); sobe.disabled = i === 0;
@@ -875,7 +906,7 @@ function render() {
       list.append(card);
     });
   }
-  for (const g of organizando ? [] : lista) {
+  for (const g of organizando ? [] : lista.filter(x => !ocultos.includes(x.id))) {
     const card = el("article", "game");
     card.id = `jogo-${g.id}`;
     const head = el("div", "game-head");
@@ -1013,9 +1044,19 @@ $("#organizar").addEventListener("click", () => {
   render();
   if (!organizando) $("#list").scrollIntoView({ block: "start", behavior: "smooth" });
 });
+// ícones de olho aberto / olho riscado (traço na cor do texto)
+const ICONE_OLHO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICONE_OLHO_FECHADO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-6.5 0-10-7-10-7a18.5 18.5 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+function alternarOculto(gid) {
+  const lista = ocultos.includes(gid) ? ocultos.filter(id => id !== gid) : [...ocultos, gid];
+  if (lista.length >= JOGOS.length) return;   // sempre fica pelo menos um jogo
+  ocultos = lista;
+  ls.set("jdd:ocultos", lista.length ? JSON.stringify(lista) : null);
+  render();
+}
 $("#ordem-padrao").addEventListener("click", () => {
-  ordem = null;
-  ls.set("jdd:ordem", null);
+  ordem = null; ocultos = [];
+  ls.set("jdd:ordem", null); ls.set("jdd:ocultos", null);
   render();
   $("#organizar").focus();
 });
