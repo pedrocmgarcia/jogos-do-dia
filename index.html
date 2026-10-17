@@ -139,6 +139,14 @@ pre.grid.share-preview { font-size: .85rem; line-height: 1.35; max-height: none;
 .toast:empty { display: none; }
 
 main { display: grid; gap: 14px; }
+/* "Mudar ordem": cartões compactos com setas */
+.list-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 14px; margin-bottom: -6px; }
+.list-tools .hint { flex: 1 1 200px; }
+.list-tools .link { color: var(--muted); font-size: .9rem; }
+.game.compacto { padding: 10px 14px; }
+.game.compacto .game-head { align-items: center; flex-wrap: nowrap; }
+.ordem-btns { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.ordem-btns button { min-width: 44px; padding-inline: 10px; font-size: 1.1rem; }
 .game { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 12px; min-width: 0; scroll-margin-top: 16px; }
 .game-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
 .game-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; display: flex; align-items: center; gap: 10px; }
@@ -238,6 +246,12 @@ footer { color: var(--muted); font-size: .85rem; }
     </section>
   </header>
 
+  <div class="list-tools">
+    <span class="hint" id="ordem-hint" hidden>Use as setas para mudar a ordem. Vale só neste aparelho.</span>
+    <button type="button" class="link" id="ordem-padrao" hidden>Voltar à ordem padrão</button>
+    <button type="button" id="organizar">Mudar ordem</button>
+  </div>
+
   <main id="list"></main>
 
   <footer>Em cada jogo, quem acerta com menos tentativas leva o ponto do dia.</footer>
@@ -251,12 +265,13 @@ import { PESSOAS, firebaseConfig } from "./config.js";
 // logo = ícone da aba do site do jogo, guardado em logos/; marca = numerozinho no canto do logo.
 // palavras = quantas palavras o jogo tem (Dueto e Quarteto mostram uma tentativa em emoji por palavra).
 // RECONHECE diz como achar o jogo no texto de compartilhar; a ordem importa (Quarteto e Dueto antes do Termo).
+// A ordem desta lista é a ordem padrão na tela; cada aparelho pode mudar a sua com o botão "Mudar ordem".
 const JOGOS = [
+  { id: "globle",   nome: "Globle",   url: "https://globle-game.com", max: null, logo: "logos/globle.png", desc: "Ache o país secreto pelo calor no globo. Menos palpites é melhor." },
+  { id: "flagle",   nome: "Flagle",   url: "https://www.flagle.io",   max: 6,    logo: "logos/flagle.png", desc: "Monte a bandeira do dia em 6 tentativas." },
   { id: "termo",    nome: "Termo",    url: "https://term.ooo",        max: 6,    logo: "logos/termo.png",  desc: "Uma palavra de 5 letras em 6 tentativas." },
   { id: "dueto",    nome: "Dueto",    url: "https://term.ooo/2/",     max: 7,    logo: "logos/termo.png",  marca: "2", palavras: 2, desc: "Duas palavras ao mesmo tempo, 7 tentativas." },
   { id: "quarteto", nome: "Quarteto", url: "https://term.ooo/4/",     max: 9,    logo: "logos/termo.png",  marca: "4", palavras: 4, desc: "Quatro palavras ao mesmo tempo, 9 tentativas." },
-  { id: "globle",   nome: "Globle",   url: "https://globle-game.com", max: null, logo: "logos/globle.png", desc: "Ache o país secreto pelo calor no globo. Menos palpites é melhor." },
-  { id: "flagle",   nome: "Flagle",   url: "https://www.flagle.io",   max: 6,    logo: "logos/flagle.png", desc: "Monte a bandeira do dia em 6 tentativas." },
 ];
 const RECONHECE = [
   ["quarteto", /term\.ooo\/4|quarteto/i],
@@ -275,6 +290,17 @@ const dateOf = k => { const [y, m, d] = k.split("-").map(Number); return new Dat
 const hoje = () => keyOf(new Date());
 const curto = k => dateOf(k).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 const jogo = id => JOGOS.find(j => j.id === id);
+// aplica a ordem salva no aparelho: ignora jogos desconhecidos ou repetidos e põe no fim os que faltarem
+function ordenarJogos(salva) {
+  const vistos = new Set(), out = [];
+  for (const id of Array.isArray(salva) ? salva : []) {
+    const g = jogo(id);
+    if (g && !vistos.has(id)) { vistos.add(id); out.push(g); }
+  }
+  for (const g of JOGOS) if (!vistos.has(g.id)) out.push(g);
+  return out;
+}
+const jogosNaOrdem = () => ordenarJogos(ordem);
 function logoDe(g) {
   const box = document.createElement("span");
   box.className = "logo";
@@ -296,6 +322,8 @@ let modo = "carregando";      // carregando | remoto | local | erro
 let dias = {};                // { "AAAA-MM-DD": { A: { jogo: {ok, n, txt, at} }, B: {...} } }
 let eu = ls.get("jdd:eu");    // "A" | "B" | null — quem está usando este aparelho
 if (!LADOS.includes(eu)) eu = null;
+let ordem = (() => { try { return JSON.parse(ls.get("jdd:ordem")); } catch (e) { return null; } })();
+let organizando = false;      // modo "Mudar ordem"
 let viewDay = hoje();
 let lastToday = viewDay;
 let editing = null;
@@ -465,7 +493,7 @@ function textoQuarteto({ grades, tentativas }) {
 // texto do resumo do dia para mandar para a outra pessoa, no estilo dos próprios jogos:
 // cada jogo com o resultado e, logo abaixo, as tentativas (a grade que o jogo compartilhou)
 function resumoTexto(day, url) {
-  const meus = JOGOS.map(g => [g, resultOf(eu, day, g.id)]);
+  const meus = jogosNaOrdem().map(g => [g, resultOf(eu, day, g.id)]);
   const quad = r => !r ? "⬜" : r.ok ? "🟩" : "🟥";
   const acertos = meus.filter(([, r]) => r && r.ok).length;
   const blocos = meus.map(([g, r]) => [`${quad(r)} ${g.nome} ${r ? fmtRes(g, r) : "não jogou"}`, ...gradeDe(r?.txt)]);
@@ -824,7 +852,30 @@ function render() {
   // jogos
   const list = $("#list");
   list.replaceChildren();
-  for (const g of JOGOS) {
+  $("#organizar").textContent = organizando ? "Pronto" : "Mudar ordem";
+  $("#organizar").className = organizando ? "primary" : "";
+  $("#ordem-hint").hidden = !organizando;
+  $("#ordem-padrao").hidden = !organizando || !ordem;
+  const lista = jogosNaOrdem();
+  if (organizando) {
+    lista.forEach((g, i) => {
+      const card = el("article", "game compacto");
+      const head = el("div", "game-head");
+      const h2 = el("h2");
+      if (g.logo) h2.append(logoDe(g));
+      h2.append(g.nome);
+      const btns = el("div", "ordem-btns");
+      const sobe = botao("↑", `sobe-${g.id}`, null, () => mover(g.id, -1));
+      const desce = botao("↓", `desce-${g.id}`, null, () => mover(g.id, 1));
+      sobe.setAttribute("aria-label", `Subir ${g.nome}`); sobe.disabled = i === 0;
+      desce.setAttribute("aria-label", `Descer ${g.nome}`); desce.disabled = i === lista.length - 1;
+      btns.append(sobe, desce);
+      head.append(h2, btns);
+      card.append(head);
+      list.append(card);
+    });
+  }
+  for (const g of organizando ? [] : lista) {
     const card = el("article", "game");
     card.id = `jogo-${g.id}`;
     const head = el("div", "game-head");
@@ -942,6 +993,32 @@ function form(g) {
   f.addEventListener("submit", e => { e.preventDefault(); submitForm(g); });
   return f;
 }
+
+// ---- ordem dos jogos neste aparelho ----
+function mover(gid, delta) {
+  const ids = jogosNaOrdem().map(g => g.id);
+  const i = ids.indexOf(gid), j = i + delta;
+  if (i < 0 || j < 0 || j >= ids.length) return;
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  ordem = ids;
+  ls.set("jdd:ordem", JSON.stringify(ids));
+  render();
+  // se o botão ficou desativado (chegou na ponta), mantém o foco no outro botão do mesmo jogo
+  const alvo = document.getElementById(`${delta < 0 ? "sobe" : "desce"}-${gid}`);
+  if (alvo?.disabled) document.getElementById(`${delta < 0 ? "desce" : "sobe"}-${gid}`)?.focus();
+}
+$("#organizar").addEventListener("click", () => {
+  organizando = !organizando;
+  editing = null; pendingDelete = null;
+  render();
+  if (!organizando) $("#list").scrollIntoView({ block: "start", behavior: "smooth" });
+});
+$("#ordem-padrao").addEventListener("click", () => {
+  ordem = null;
+  ls.set("jdd:ordem", null);
+  render();
+  $("#organizar").focus();
+});
 
 // ---- navegação ----
 function irPara(k, manterEdicao = false) {
