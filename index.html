@@ -6,12 +6,20 @@
 <meta name="theme-color" content="#eef1f4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#12161d" media="(prefers-color-scheme: dark)">
 <title>Jogos do Dia</title>
+<!-- "Adicionar à tela inicial": nome, ícone e abrir como app -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jogos do Dia">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%233e8e5a'/%3E%3Ctext x='16' y='23' font-size='20' font-family='sans-serif' font-weight='800' fill='white' text-anchor='middle'%3EJ%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-/* Layout: topo compacto (letras, dia, placar), campo "Colar resultado", depois um cartão por jogo com as duas colunas lado a lado */
+/* Layout: topo compacto (letras, abas Hoje/Histórico, dia, progresso, próximo jogo), "Colar resultado",
+   depois um cartão por jogo com as duas pessoas lado a lado; o Histórico troca a lista por calendário e estatísticas */
 :root {
   --bg: #eef1f4;
   --surface: #ffffff;
@@ -83,14 +91,52 @@ button.link { border: 0; padding: 0; min-height: 0; color: inherit; text-decorat
   font-family: var(--font-mono); font-size: .82rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
 }
 
-/* placar em tabela: pessoas nas linhas, hoje e geral nas colunas */
-.board { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: grid; gap: 2px; }
-.b-row { display: grid; grid-template-columns: minmax(0, 1fr) 4rem 7rem; align-items: baseline; gap: 8px; }
-.b-head span { font-family: var(--font-mono); font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; text-align: right; }
-.b-name { font-family: var(--font-display); font-weight: 500; font-size: 1.1rem; overflow-wrap: anywhere; }
+/* abas Hoje / Histórico; o que não é da aba atual some */
+.fora { display: none !important; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.tabs button { border: 0; font-weight: 700; color: var(--muted); }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+/* progresso do dia (sem placar): para cada pessoa, um quadradinho por jogo e quantos já jogou */
+.board { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: grid; gap: 4px; }
+.b-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; }
+.b-name { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; overflow-wrap: anywhere; }
 .b-name small { font-family: var(--font-body); font-size: .8rem; color: var(--muted); font-weight: 400; }
-.b-row b { text-align: right; font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
-.b-row b.lead { color: var(--done); }
+.b-quads { display: flex; gap: 3px; }
+.b-quads i { width: 14px; height: 14px; border-radius: 3px; background: var(--tile); }
+.b-quads i.ok { background: var(--done); }
+.b-quads i.miss { background: var(--miss); }
+.b-count { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.2em; text-align: right; }
+
+/* atalho para o próximo jogo que falta */
+.next-game {
+  display: flex; align-items: center; gap: 10px; text-decoration: none;
+  background: var(--ink); color: var(--bg); border-radius: 10px; padding: 12px 14px;
+  font-family: var(--font-display); font-weight: 800; font-size: 1.15rem;
+}
+.next-game small { font-family: var(--font-body); font-weight: 400; font-size: .85rem; opacity: .8; margin-left: auto; }
+.next-game .logo .marca { border-color: var(--ink); }
+.sep { margin: 6px 0 -4px; font-family: var(--font-mono); font-weight: 500; font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.game.feito .desc { display: none; }
+
+/* histórico: calendário de 5 semanas e estatísticas por pessoa */
+.historico { display: grid; gap: 14px; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-dow { font-family: var(--font-mono); font-size: .6rem; color: var(--muted); text-align: center; }
+.cal-d { aspect-ratio: 1; min-height: 0; padding: 0; border: 0; border-radius: 3px; background: var(--line); cursor: pointer; }
+.cal-d.ok { background: var(--done); }
+.cal-d.erro { background: var(--miss); }
+.cal-d.futuro { background: transparent; cursor: default; }
+.cal-d.hoje { outline: 2px solid var(--ink); outline-offset: 1px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+.stat { display: grid; }
+.stat span { font-family: var(--font-mono); font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.stat b { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.dist { display: grid; grid-template-columns: max-content 1fr max-content; align-items: center; gap: 3px 6px; font-family: var(--font-mono); font-size: .7rem; color: var(--muted); }
+.dist-track { height: 10px; border-radius: 2px; background: var(--bg); overflow: hidden; }
+.dist-bar { display: block; height: 100%; background: var(--done); border-radius: 2px; }
+.dist-bar.erro { background: var(--miss); }
+.dist-n { font-variant-numeric: tabular-nums; text-align: right; }
 
 .who-pick { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; }
 .who-pick p { margin: 0; font-weight: 700; }
@@ -174,13 +220,10 @@ main { display: grid; gap: 14px; }
 /* sempre duas colunas, inclusive no celular */
 .cols { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
 .cell { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
-.cell.win { border-color: var(--done); box-shadow: inset 0 0 0 1px var(--done); }
 .cell.editing { grid-column: 1 / -1; }
 .who { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 700; min-width: 0; }
 .who .name { overflow-wrap: anywhere; }
 .who .you { font-weight: 400; color: var(--muted); font-size: .85rem; }
-.badge { font-family: var(--font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--tile-ink); background: var(--done); border-radius: 3px; padding: 1px 6px; font-weight: 500; }
-.badge.tie { background: var(--near); }
 .res { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .res .t { width: 24px; height: 24px; border-radius: 4px; background: var(--tile); flex: none; }
 .res .t.ok { background: var(--done); }
@@ -214,13 +257,18 @@ footer { color: var(--muted); font-size: .85rem; }
       <span class="word"><span>D</span><span class="y">O</span></span>
       <span class="word"><span>D</span><span class="g">I</span><span>A</span></span>
     </div>
-    <div class="daynav">
+    <nav class="tabs" aria-label="Seções do site">
+      <button type="button" id="aba-hoje" aria-pressed="true">Hoje</button>
+      <button type="button" id="aba-hist" aria-pressed="false">Histórico</button>
+    </nav>
+    <div class="daynav" data-aba="hoje">
       <button type="button" id="prev" aria-label="Dia anterior">←</button>
       <span class="date" id="date"></span>
       <button type="button" id="today">Hoje</button>
       <button type="button" id="next" aria-label="Próximo dia">→</button>
     </div>
-    <div class="board" id="board" aria-label="Placar"></div>
+    <div class="board" id="board" data-aba="hoje" aria-label="Quem já jogou o quê no dia"></div>
+    <a class="next-game" id="next-game" data-aba="hoje" target="_blank" rel="noopener" hidden></a>
     <div class="who-pick" id="who-pick" hidden>
       <p>Quem é você neste aparelho?</p>
       <div class="row">
@@ -230,7 +278,7 @@ footer { color: var(--muted); font-size: .85rem; }
     </div>
     <div class="me-line" id="me-line" hidden></div>
     <div class="note" id="note" hidden></div>
-    <section class="quick" id="quick" hidden>
+    <section class="quick" id="quick" data-aba="hoje" hidden>
       <div class="quick-head">
         <label for="quick-txt">Colar resultado</label>
         <div class="actions">
@@ -242,7 +290,7 @@ footer { color: var(--muted); font-size: .85rem; }
       <textarea id="quick-txt" rows="3" placeholder="Cole aqui o texto de compartilhar de qualquer um dos 5 jogos"></textarea>
       <div class="quick-preview" id="quick-preview" aria-live="polite"></div>
     </section>
-    <section class="share" id="share" hidden>
+    <section class="share" id="share" data-aba="hoje" hidden>
       <div class="share-head">
         <span class="share-title" id="share-title"></span>
         <button type="button" id="share-btn">Compartilhar resumo</button>
@@ -252,16 +300,18 @@ footer { color: var(--muted); font-size: .85rem; }
     </section>
   </header>
 
-  <div class="list-tools">
+  <div class="list-tools" data-aba="hoje">
     <span class="hint" id="ordem-hint" hidden>Use as setas para mudar a ordem e o olho para esconder ou mostrar um jogo. Vale só neste aparelho.</span>
     <span class="hint" id="ocultos-info" hidden></span>
     <button type="button" class="link" id="ordem-padrao" hidden>Voltar ao padrão</button>
     <button type="button" id="organizar">Organizar jogos</button>
   </div>
 
-  <main id="list"></main>
+  <main id="list" data-aba="hoje"></main>
 
-  <footer>Em cada jogo, quem acerta com menos tentativas leva o ponto do dia.</footer>
+  <section class="historico" id="historico" data-aba="hist" aria-label="Histórico dos jogos"></section>
+
+  <footer>Os resultados ficam guardados e aparecem no Histórico. Toque num dia do calendário para ver aquele dia.</footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -341,6 +391,7 @@ if (!LADOS.includes(eu)) eu = null;
 let ordem = (() => { try { return JSON.parse(ls.get("jdd:ordem")); } catch (e) { return null; } })();
 let ocultos = lerOcultos(ls.get("jdd:ocultos"));
 let organizando = false;      // modo "Organizar jogos"
+let aba = typeof location !== "undefined" && location.hash === "#historico" ? "hist" : "hoje";   // "hoje" | "hist"
 let viewDay = hoje();
 let lastToday = viewDay;
 let editing = null;
@@ -378,22 +429,51 @@ function piscar(gid, msg, kind = "ok") {
 
 const resultOf = (p, day, gid) => dias[day]?.[p]?.[gid] || null;
 
-// quem levou o ponto num jogo/dia: "A", "B", "empate" ou null (falta alguém jogar)
-function winnerOf(day, gid) {
-  const a = resultOf("A", day, gid), b = resultOf("B", day, gid);
-  if (!a || !b) return null;
-  const va = a.ok ? a.n : Infinity, vb = b.ok ? b.n : Infinity;
-  if (va === vb) return "empate";
-  return va < vb ? "A" : "B";
+// ---- histórico (sem competição: cada pessoa vê o próprio caminho e o da outra, lado a lado) ----
+// estatísticas de uma pessoa num jogo, usando todos os dias guardados
+function estatisticas(p, gid, hojeK = hoje()) {
+  const g = jogo(gid);
+  const res = Object.keys(dias).sort().map(k => resultOf(p, k, gid)).filter(Boolean);
+  const certos = res.filter(r => r.ok);
+  const faixas = g.max
+    ? Array.from({ length: g.max }, (_, i) => [String(i + 1), i + 1, i + 1])
+    : [["1–3", 1, 3], ["4–6", 4, 6], ["7–10", 7, 10], ["11–15", 11, 15], ["16+", 16, Infinity]];
+  const dist = faixas.map(([rot, de, ate]) => ({ rot, n: certos.filter(r => r.n >= de && r.n <= ate).length }));
+  dist.push({ rot: g.max ? "X" : "Desistiu", n: res.length - certos.length, erro: true });
+  // sequência: dias seguidos com o jogo registrado, terminando hoje (ou ontem, se hoje ainda não jogou)
+  let sequencia = 0;
+  const d = dateOf(hojeK);
+  if (!resultOf(p, hojeK, gid)) d.setDate(d.getDate() - 1);
+  while (resultOf(p, keyOf(d), gid)) { sequencia++; d.setDate(d.getDate() - 1); }
+  return {
+    jogados: res.length,
+    acertos: certos.length,
+    pct: res.length ? Math.round(100 * certos.length / res.length) : null,
+    media: certos.length ? certos.reduce((s, r) => s + r.n, 0) / certos.length : null,
+    dist,
+    sequencia,
+  };
 }
-function pontos(days) {
-  const pts = { A: 0, B: 0 };
-  for (const day of days) for (const g of JOGOS) {
-    const w = winnerOf(day, g.id);
-    if (w === "A" || w === "B") pts[w]++;
+// calendário das últimas semanas (domingo a sábado), terminando na semana de hoje
+function calendario(p, gid, hojeK = hoje(), semanas = 5) {
+  const d = dateOf(hojeK);
+  d.setDate(d.getDate() - d.getDay() - 7 * (semanas - 1));
+  const cels = [];
+  while (cels.length < semanas * 7) {
+    const k = keyOf(d), r = resultOf(p, k, gid);
+    cels.push({ k, r, estado: k > hojeK ? "futuro" : !r ? "nada" : r.ok ? "ok" : "erro" });
+    d.setDate(d.getDate() + 1);
   }
-  return pts;
+  return cels;
 }
+// acesso rápido: o próximo jogo que eu ainda não registrei no dia, e a lista com os que faltam primeiro
+const proximoJogo = day => (eu && jogosVisiveis().find(g => !resultOf(eu, day, g.id))) || null;
+function ordemDoDia(day) {
+  const v = jogosVisiveis();
+  if (!eu) return v;
+  return [...v.filter(g => !resultOf(eu, day, g.id)), ...v.filter(g => resultOf(eu, day, g.id))];
+}
+
 function fmtRes(g, r) {
   if (r.ok) return g.max ? `${r.n}/${g.max}` : `${r.n} palpite${r.n > 1 ? "s" : ""}`;
   return g.max ? `X/${g.max}` : "Desistiu";
@@ -521,11 +601,6 @@ function resumoTexto(day, url) {
     "",
     blocos.map(b => b.join("\n")).join(temGrade ? "\n\n" : "\n"),
   ];
-  const o = eu === "A" ? "B" : "A";
-  if (JOGOS.some(g => resultOf(o, day, g.id))) {
-    const pts = pontos([day]);
-    linhas.push("", `Placar do dia: ${PESSOAS[eu]} ${pts[eu]} × ${pts[o]} ${PESSOAS[o]}`);
-  }
   linhas.push("", url);
   return linhas.join("\n");
 }
@@ -825,23 +900,42 @@ function render() {
   $("#next").disabled = ehHoje;
   $("#today").hidden = ehHoje;
 
-  // placar
+  // abas: o que não é da aba atual some
+  $("#aba-hoje").setAttribute("aria-pressed", String(aba === "hoje"));
+  $("#aba-hist").setAttribute("aria-pressed", String(aba === "hist"));
+  document.querySelectorAll("[data-aba]").forEach(e => e.classList.toggle("fora", e.dataset.aba !== aba));
+
+  // progresso do dia: um quadradinho por jogo (na ordem deste aparelho) para cada pessoa, sem placar
   const board = $("#board");
   board.replaceChildren();
-  const comDados = Object.keys(dias).filter(k => JOGOS.some(g => winnerOf(k, g.id)));
-  const ptsDia = pontos([viewDay]), ptsGeral = pontos(comDados);
-  const head = el("div", "b-row b-head");
-  head.append(el("span"), el("span", null, ehHoje ? "Hoje" : "No dia"), el("span", null, `Geral · ${comDados.length} dia${comDados.length === 1 ? "" : "s"}`));
-  board.append(head);
+  const vis = jogosVisiveis();
   for (const p of LADOS) {
-    const o = p === "A" ? "B" : "A";
     const row = el("div", "b-row");
     const nome = el("span", "b-name", PESSOAS[p]);
     if (p === eu) nome.append(el("small", null, " (você)"));
-    row.append(nome,
-      el("b", ptsDia[p] > ptsDia[o] ? "lead" : null, String(ptsDia[p])),
-      el("b", ptsGeral[p] > ptsGeral[o] ? "lead" : null, String(ptsGeral[p])));
+    const quads = el("span", "b-quads");
+    let feitos = 0;
+    for (const g of vis) {
+      const r = resultOf(p, viewDay, g.id);
+      if (r) feitos++;
+      const q = el("i", r ? (r.ok ? "ok" : "miss") : null);
+      q.title = `${g.nome}: ${r ? fmtRes(g, r) : "ainda não jogou"}`;
+      quads.append(q);
+    }
+    quads.setAttribute("aria-hidden", "true");
+    row.append(nome, quads, el("span", "b-count", `${feitos} de ${vis.length}`));
     board.append(row);
+  }
+
+  // atalho para o próximo jogo que falta (só hoje)
+  const prox = ehHoje && !organizando && modo !== "carregando" ? proximoJogo(viewDay) : null;
+  const nx = $("#next-game");
+  nx.hidden = !prox;
+  if (prox) {
+    nx.href = prox.url;
+    nx.replaceChildren();
+    if (prox.logo) nx.append(logoDe(prox));
+    nx.append(`Jogar ${prox.nome} ↗`, el("small", null, "próximo que falta"));
   }
 
   // quem sou eu
@@ -906,8 +1000,15 @@ function render() {
       list.append(card);
     });
   }
-  for (const g of organizando ? [] : lista.filter(x => !ocultos.includes(x.id))) {
-    const card = el("article", "game");
+  // os que faltam primeiro; os já registrados descem, sem a descrição
+  let separou = false;
+  for (const g of organizando ? [] : ordemDoDia(viewDay)) {
+    const feito = !!(eu && resultOf(eu, viewDay, g.id));
+    if (feito && !separou) {
+      separou = true;
+      if (list.children.length) list.append(el("h3", "sep", ehHoje ? "Já registrados hoje" : "Já registrados"));
+    }
+    const card = el("article", "game" + (feito ? " feito" : ""));
     card.id = `jogo-${g.id}`;
     const head = el("div", "game-head");
     const h2 = el("h2");
@@ -919,12 +1020,13 @@ function render() {
     head.append(a);
     card.append(head);
 
-    const w = winnerOf(viewDay, g.id);
     const cols = el("div", "cols");
-    for (const p of LADOS) cols.append(cell(g, p, w));
+    for (const p of LADOS) cols.append(cell(g, p));
     card.append(cols);
     list.append(card);
   }
+
+  if (aba === "hist") renderHistorico();
 
   if (fid) {
     const back = document.getElementById(fid);
@@ -935,16 +1037,88 @@ function render() {
   }
 }
 
-function cell(g, p, w) {
+// ---- aba Histórico ----
+function renderHistorico() {
+  const box = $("#historico");
+  box.replaceChildren();
+  if (modo === "carregando") { box.append(el("p", "hint", "Carregando o histórico…")); return; }
+  const hk = hoje();
+  for (const g of jogosVisiveis()) {
+    const card = el("article", "game");
+    card.id = `hist-${g.id}`;
+    const head = el("div", "game-head");
+    const h2 = el("h2");
+    if (g.logo) h2.append(logoDe(g));
+    h2.append(g.nome);
+    const a = el("a", "play", "Jogar ↗");
+    a.href = g.url; a.target = "_blank"; a.rel = "noopener";
+    head.append(h2, a);
+    card.append(head);
+
+    const cols = el("div", "cols");
+    for (const p of LADOS) {
+      const c = el("div", "cell");
+      const who = el("div", "who");
+      who.append(el("span", "name", PESSOAS[p]));
+      if (p === eu) who.append(el("span", "you", "(você)"));
+      c.append(who);
+
+      const cal = el("div", "cal");
+      for (const l of ["D", "S", "T", "Q", "Q", "S", "S"]) cal.append(el("span", "cal-dow", l));
+      for (const d of calendario(p, g.id, hk, 5)) {
+        if (d.estado === "futuro") { cal.append(el("span", "cal-d futuro")); continue; }
+        const rot = `${curto(d.k)}: ${d.r ? fmtRes(g, d.r) : "não jogou"}`;
+        const b = botao("", null, `cal-d ${d.estado}${d.k === hk ? " hoje" : ""}`, () => abrirDia(d.k, g.id));
+        b.title = rot; b.setAttribute("aria-label", rot);
+        cal.append(b);
+      }
+      c.append(cal);
+
+      const e = estatisticas(p, g.id, hk);
+      if (!e.jogados) {
+        c.append(el("div", "hint", "Ainda sem jogos registrados."));
+      } else {
+        const stats = el("div", "stats");
+        const stat = (rot, val) => { const s = el("div", "stat"); s.append(el("span", null, rot), el("b", null, val)); return s; };
+        stats.append(
+          stat("Sequência", `${e.sequencia} dia${e.sequencia === 1 ? "" : "s"}`),
+          stat("Jogos", String(e.jogados)),
+          stat("Acertos", `${e.pct}%`),
+          stat(g.max ? "Média" : "Média palp.", e.media == null ? "—" : e.media.toFixed(1).replace(".", ",")));
+        c.append(stats);
+        const dist = el("div", "dist");
+        const maior = Math.max(1, ...e.dist.map(x => x.n));
+        for (const x of e.dist) {
+          if (x.erro && !x.n && !g.max) continue;   // "Desistiu" do Globle só aparece se aconteceu
+          const track = el("span", "dist-track");
+          const bar = el("span", "dist-bar" + (x.erro ? " erro" : ""));
+          bar.style.width = x.n ? `${Math.max(6, 100 * x.n / maior)}%` : "0";
+          track.append(bar);
+          dist.append(el("span", null, x.rot), track, el("span", "dist-n", String(x.n)));
+        }
+        c.append(dist);
+      }
+      cols.append(c);
+    }
+    card.append(cols);
+    box.append(card);
+  }
+}
+// tocar num dia do calendário abre aquele dia na aba Hoje, já no jogo
+function abrirDia(k, gid) {
+  viewDay = k; editing = null; pendingDelete = null;
+  irAba("hoje");
+  document.getElementById(`jogo-${gid}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+function cell(g, p) {
   const meu = p === eu;
   const r = resultOf(p, viewDay, g.id);
   const emEdicao = meu && editing === g.id;
-  const c = el("div", "cell" + (w === p ? " win" : "") + (emEdicao ? " editing" : ""));
+  const c = el("div", "cell" + (emEdicao ? " editing" : ""));
   const who = el("div", "who");
   who.append(el("span", "name", PESSOAS[p]));
   if (meu) who.append(el("span", "you", "(você)"));
-  if (w === p) who.append(el("span", "badge", "levou"));
-  if (w === "empate") who.append(el("span", "badge tie", "empate"));
   c.append(who);
 
   if (emEdicao) { c.append(form(g)); return c; }
@@ -1060,6 +1234,17 @@ $("#ordem-padrao").addEventListener("click", () => {
   render();
   $("#organizar").focus();
 });
+
+// ---- abas Hoje / Histórico (o endereço termina em #historico na aba Histórico) ----
+function irAba(nova) {
+  aba = nova;
+  if (aba === "hist") { organizando = false; editing = null; }
+  history.replaceState(null, "", aba === "hist" ? "#historico" : location.pathname + location.search);
+  render();
+}
+$("#aba-hoje").addEventListener("click", () => irAba("hoje"));
+$("#aba-hist").addEventListener("click", () => { irAba("hist"); scrollTo({ top: 0 }); });
+addEventListener("hashchange", () => irAba(location.hash === "#historico" ? "hist" : "hoje"));
 
 // ---- navegação ----
 function irPara(k, manterEdicao = false) {
