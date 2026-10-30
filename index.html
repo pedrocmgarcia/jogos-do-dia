@@ -108,6 +108,30 @@ button.link { border: 0; padding: 0; min-height: 0; color: inherit; text-decorat
 .b-quads i.miss { background: var(--miss); }
 .b-count { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.2em; text-align: right; }
 
+/* modo competitivo: chave liga/desliga, placar, quem levou cada jogo e confronto no histórico */
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .92rem; cursor: pointer; }
+.switch-row small { display: block; color: var(--muted); font-size: .8rem; }
+.switch-row input {
+  appearance: none; -webkit-appearance: none; flex: none; margin: 0; cursor: pointer;
+  width: 44px; height: 26px; border-radius: 13px; background: var(--tile); position: relative; transition: background .15s;
+}
+.switch-row input::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--surface); transition: transform .15s;
+}
+.switch-row input:checked { background: var(--near); }
+.switch-row input:checked::after { transform: translateX(18px); }
+@media (prefers-reduced-motion: reduce) { .switch-row input, .switch-row input::after { transition: none; } }
+.b-placar { display: flex; flex-wrap: wrap; gap: 2px 14px; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-size: .9rem; color: var(--muted); }
+.b-placar b { color: var(--ink); font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; }
+.b-placar b.lead { color: var(--done); }
+.cell.win { border-color: var(--done); box-shadow: inset 0 0 0 1px var(--done); }
+.badge { font-family: var(--font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--tile-ink); background: var(--done); border-radius: 3px; padding: 1px 6px; font-weight: 500; }
+.badge.tie { background: var(--near); }
+.confronto { font-size: .9rem; color: var(--muted); }
+.confronto b { color: var(--ink); font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; }
+.confronto b.lead { color: var(--done); }
+
 /* atalho para o próximo jogo que falta */
 .next-game {
   display: flex; align-items: center; gap: 10px; text-decoration: none;
@@ -277,6 +301,10 @@ footer { color: var(--muted); font-size: .85rem; }
       </div>
     </div>
     <div class="me-line" id="me-line" hidden></div>
+    <label class="switch-row" for="competitivo">
+      <span>Modo competitivo <small id="competitivo-desc">placar e quem levou cada jogo</small></span>
+      <input type="checkbox" role="switch" id="competitivo">
+    </label>
     <div class="note" id="note" hidden></div>
     <section class="quick" id="quick" data-aba="hoje" hidden>
       <div class="quick-head">
@@ -390,6 +418,7 @@ let eu = ls.get("jdd:eu");    // "A" | "B" | null — quem está usando este apa
 if (!LADOS.includes(eu)) eu = null;
 let ordem = (() => { try { return JSON.parse(ls.get("jdd:ordem")); } catch (e) { return null; } })();
 let ocultos = lerOcultos(ls.get("jdd:ocultos"));
+let competitivo = ls.get("jdd:competitivo") === "1";   // modo competitivo neste aparelho
 let organizando = false;      // modo "Organizar jogos"
 let aba = typeof location !== "undefined" && location.hash === "#historico" ? "hist" : "hoje";   // "hoje" | "hist"
 let viewDay = hoje();
@@ -466,6 +495,35 @@ function calendario(p, gid, hojeK = hoje(), semanas = 5) {
   }
   return cels;
 }
+// ---- modo competitivo (opcional; cada aparelho liga ou desliga, e começa desligado) ----
+// quem levou o jogo no dia: "A", "B", "empate" ou null (falta alguém jogar).
+// Menos tentativas leva; qualquer acerto ganha de "não acertei"; os dois errarem é empate.
+function winnerOf(day, gid) {
+  const a = resultOf("A", day, gid), b = resultOf("B", day, gid);
+  if (!a || !b) return null;
+  const va = a.ok ? a.n : Infinity, vb = b.ok ? b.n : Infinity;
+  if (va === vb) return "empate";
+  return va < vb ? "A" : "B";
+}
+function pontos(days) {
+  const pts = { A: 0, B: 0 };
+  for (const day of days) for (const g of JOGOS) {
+    const w = winnerOf(day, g.id);
+    if (w === "A" || w === "B") pts[w]++;
+  }
+  return pts;
+}
+// vitórias de cada pessoa num jogo, em todos os dias guardados
+function confronto(gid) {
+  const c = { A: 0, B: 0, empates: 0 };
+  for (const k of Object.keys(dias)) {
+    const w = winnerOf(k, gid);
+    if (w === "empate") c.empates++;
+    else if (w) c[w]++;
+  }
+  return c;
+}
+
 // acesso rápido: o próximo jogo que eu ainda não registrei no dia, e a lista com os que faltam primeiro
 const proximoJogo = day => (eu && jogosVisiveis().find(g => !resultOf(eu, day, g.id))) || null;
 function ordemDoDia(day) {
@@ -601,6 +659,11 @@ function resumoTexto(day, url) {
     "",
     blocos.map(b => b.join("\n")).join(temGrade ? "\n\n" : "\n"),
   ];
+  const o = eu === "A" ? "B" : "A";
+  if (competitivo && JOGOS.some(g => resultOf(o, day, g.id))) {
+    const pts = pontos([day]);
+    linhas.push("", `Placar do dia: ${PESSOAS[eu]} ${pts[eu]} × ${pts[o]} ${PESSOAS[o]}`);
+  }
   linhas.push("", url);
   return linhas.join("\n");
 }
@@ -926,6 +989,19 @@ function render() {
     row.append(nome, quads, el("span", "b-count", `${feitos} de ${vis.length}`));
     board.append(row);
   }
+  // modo competitivo: placar do dia e geral, com quem está na frente em verde
+  $("#competitivo").checked = competitivo;
+  if (competitivo) {
+    const diasComJogo = Object.keys(dias).filter(k => JOGOS.some(g => winnerOf(k, g.id)));
+    const linha = el("div", "b-placar");
+    const placar = (rot, pts) => {
+      const s = el("span", null, `${rot}: ${PESSOAS.A} `);
+      s.append(el("b", pts.A > pts.B ? "lead" : null, String(pts.A)), " × ", el("b", pts.B > pts.A ? "lead" : null, String(pts.B)), ` ${PESSOAS.B}`);
+      return s;
+    };
+    linha.append(placar(ehHoje ? "Hoje" : "No dia", pontos([viewDay])), placar("Geral", pontos(diasComJogo)));
+    board.append(linha);
+  }
 
   // atalho para o próximo jogo que falta (só hoje)
   const prox = ehHoje && !organizando && modo !== "carregando" ? proximoJogo(viewDay) : null;
@@ -1054,6 +1130,13 @@ function renderHistorico() {
     a.href = g.url; a.target = "_blank"; a.rel = "noopener";
     head.append(h2, a);
     card.append(head);
+    if (competitivo) {
+      const cf = confronto(g.id);
+      const linha = el("div", "confronto", `Vitórias: ${PESSOAS.A} `);
+      linha.append(el("b", cf.A > cf.B ? "lead" : null, String(cf.A)), " × ", el("b", cf.B > cf.A ? "lead" : null, String(cf.B)), ` ${PESSOAS.B}`);
+      if (cf.empates) linha.append(` · ${cf.empates} empate${cf.empates === 1 ? "" : "s"}`);
+      card.append(linha);
+    }
 
     const cols = el("div", "cols");
     for (const p of LADOS) {
@@ -1115,10 +1198,13 @@ function cell(g, p) {
   const meu = p === eu;
   const r = resultOf(p, viewDay, g.id);
   const emEdicao = meu && editing === g.id;
-  const c = el("div", "cell" + (emEdicao ? " editing" : ""));
+  const w = competitivo ? winnerOf(viewDay, g.id) : null;
+  const c = el("div", "cell" + (w === p ? " win" : "") + (emEdicao ? " editing" : ""));
   const who = el("div", "who");
   who.append(el("span", "name", PESSOAS[p]));
   if (meu) who.append(el("span", "you", "(você)"));
+  if (w === p) who.append(el("span", "badge", "levou"));
+  if (w === "empate") who.append(el("span", "badge tie", "empate"));
   c.append(who);
 
   if (emEdicao) { c.append(form(g)); return c; }
@@ -1233,6 +1319,13 @@ $("#ordem-padrao").addEventListener("click", () => {
   ls.set("jdd:ordem", null); ls.set("jdd:ocultos", null);
   render();
   $("#organizar").focus();
+});
+
+// ---- chave do modo competitivo (vale só neste aparelho) ----
+$("#competitivo").addEventListener("change", e => {
+  competitivo = e.target.checked;
+  ls.set("jdd:competitivo", competitivo ? "1" : null);
+  render();
 });
 
 // ---- abas Hoje / Histórico (o endereço termina em #historico na aba Histórico) ----
